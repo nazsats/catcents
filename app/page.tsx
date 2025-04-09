@@ -1,103 +1,108 @@
-import Image from "next/image";
+'use client';
+import { useState, useEffect } from 'react';
+import { ethers } from 'ethers';
+import { db } from './lib/firebase';
+import { doc, setDoc, getDoc, arrayUnion, increment } from 'firebase/firestore';
 
-export default function Home() {
+export default function LandingPage() {
+  const [account, setAccount] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [refCode, setRefCode] = useState<string | null>(null);
+
+  // Get refCode from URL query parameters on mount
+  useEffect(() => {
+    const queryParams = new URLSearchParams(window.location.search);
+    const ref = queryParams.get('ref');
+    setRefCode(ref);
+  }, []);
+
+  const connectWallet = async (refCode?: string) => {
+    console.log('Connecting wallet...');
+    setLoading(true);
+    try {
+      if (!window.ethereum) throw new Error('MetaMask not installed');
+
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      await provider.send('eth_requestAccounts', []);
+      const signer = await provider.getSigner();
+      const address = (await signer.getAddress()).toLowerCase();
+      console.log('Wallet connected:', address);
+
+      const userRef = doc(db, 'users', address);
+      const userSnap = await getDoc(userRef);
+      if (!userSnap.exists()) {
+        console.log('Saving new user to Firebase...');
+        await setDoc(userRef, {
+          walletAddress: address,
+          meowMiles: 0,
+          proposalsGmeow: 0,
+          gamesGmeow: 0,
+          createdAt: new Date().toISOString(),
+          lastCheckIn: null,
+          referredBy: refCode || null,
+          referrals: [],
+          referralLink: `${window.location.origin}/?ref=${address}`,
+        });
+
+        if (refCode) {
+          const referrerRef = doc(db, 'users', refCode.toLowerCase());
+          const referrerSnap = await getDoc(referrerRef);
+          if (referrerSnap.exists()) {
+            console.log(`Updating referrer ${refCode} with new referral: ${address}`);
+            await setDoc(
+              referrerRef,
+              {
+                referrals: arrayUnion(address),
+                meowMiles: increment(50),
+              },
+              { merge: true }
+            );
+          } else {
+            console.log(`Referrer ${refCode} not found in Firebase`);
+          }
+        }
+      }
+
+      setAccount(address);
+      console.log('Redirecting to dashboard...');
+      window.location.href = '/dashboard'; // Force redirect
+    } catch (error) {
+      console.error('Connection failed:', error);
+      alert('Failed to connect wallet: ' + (error as Error).message);
+      setAccount(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-900 to-purple-900 text-white">
+      {account ? (
+        <div className="text-center">
+          <p className="text-xl mb-4">Connected: {account.slice(0, 6)}...{account.slice(-4)}</p>
           <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+            href="/dashboard"
+            className="bg-purple-600 px-8 py-4 rounded-lg text-lg font-semibold hover:bg-purple-700 transition-colors"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
+            Go to Dashboard
           </a>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      ) : (
+        <div className="text-center">
+          <h1 className="text-5xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-600">
+            Welcome to Catcents
+          </h1>
+          <p className="text-xl mb-8">Join our Web3 community and start earning points!</p>
+          {refCode && <p className="text-sm mb-4">Referred by: {refCode.slice(0, 6)}...</p>}
+          <button
+            onClick={() => connectWallet(refCode || undefined)}
+            disabled={loading}
+            className="bg-purple-600 px-8 py-4 rounded-lg text-lg font-semibold hover:bg-purple-700 transition-colors disabled:opacity-50"
+          >
+            {loading ? 'Connecting...' : 'Get Started - Connect Wallet'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
