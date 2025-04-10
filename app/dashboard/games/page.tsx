@@ -7,6 +7,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import Sidebar from '../../components/Sidebar';
 import Profile from '../../components/Profile';
 import { useWeb3Modal } from '../../lib/Web3ModalContext';
+import toast, { Toaster } from 'react-hot-toast';
 
 export default function Games() {
   const { account, disconnectWallet, loading } = useWeb3Modal();
@@ -28,6 +29,7 @@ export default function Games() {
       }
     } catch (error) {
       console.error('Failed to fetch game scores:', error);
+      toast.error('Failed to load game stats.');
     }
   };
 
@@ -48,11 +50,18 @@ export default function Games() {
   const handleCopyAddress = () => {
     if (account) {
       navigator.clipboard.writeText(account);
+      toast.success('Address copied!');
     }
   };
 
   if (loading) {
-    return <div className="flex min-h-screen items-center justify-center bg-black text-white">Loading...</div>;
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-black to-purple-950 text-white">
+        <svg className="animate-spin h-8 w-8 text-purple-400" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+        </svg>
+      </div>
+    );
   }
 
   if (!account) return null;
@@ -83,32 +92,31 @@ export default function Games() {
   return (
     <div className="flex min-h-screen bg-gradient-to-br from-black to-purple-950 text-white">
       <Sidebar onDisconnect={disconnectWallet} />
-      <main className="flex-1 p-8">
-        <div className="flex justify-between items-center mb-8">
-          <h2 className="text-xl font-semibold text-purple-300">Games</h2>
-          <Profile
-            account={account}
-            onCopyAddress={handleCopyAddress}
-            onDisconnect={disconnectWallet} // Added missing prop
-          />
+      <main className="flex-1 p-4 md:p-8">
+        <Toaster position="top-right" toastOptions={{ style: { background: '#1a1a1a', color: '#fff', border: '1px solid #9333ea' } }} />
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-8 gap-4">
+          <h2 className="text-2xl md:text-3xl font-bold text-purple-300">Games</h2>
+          <div className="ml-auto">
+            <Profile account={account} onCopyAddress={handleCopyAddress} onDisconnect={disconnectWallet} />
+          </div>
         </div>
 
-        <div className="bg-black/80 rounded-lg p-6 border border-purple-900 mb-8">
-          <h3 className="text-lg font-semibold text-purple-400 mb-4">Your Game Stats</h3>
-          <div className="flex items-center justify-between">
+        <div className="bg-black/90 rounded-xl p-6 border border-purple-900 shadow-md shadow-purple-500/20 mb-6 md:mb-8">
+          <h3 className="text-lg md:text-xl font-semibold text-purple-400 mb-4">Your Game Stats</h3>
+          <div className="flex flex-col sm:flex-row justify-between gap-4">
             <p className="text-gray-300">
               Total Games Gmeow: <span className="text-cyan-400 font-bold">{gamesGmeow}</span>
             </p>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
           {games.map((game) => (
             <div
               key={game.id}
-              className="bg-black/80 rounded-lg border border-purple-900 shadow-lg shadow-purple-500/20 hover:shadow-purple-500/40 transition-all duration-300 overflow-hidden"
+              className="bg-black/90 rounded-xl border border-purple-900 shadow-md shadow-purple-500/20 hover:shadow-purple-500/40 transition-all duration-300 overflow-hidden flex flex-col"
             >
-              <div className="w-full h-48 relative">
+              <div className="w-full h-40 sm:h-48 relative">
                 <img
                   src={game.image}
                   alt={game.title}
@@ -117,24 +125,24 @@ export default function Games() {
                 />
                 {game.comingSoon && (
                   <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                    <span className="text-yellow-400 font-bold text-lg">Coming Soon</span>
+                    <span className="text-yellow-400 font-bold text-base md:text-lg">Coming Soon</span>
                   </div>
                 )}
               </div>
-              <div className="p-4">
-                <h3 className="text-lg font-semibold text-purple-400">{game.title}</h3>
+              <div className="p-4 flex flex-col flex-grow">
+                <h3 className="text-base md:text-lg font-semibold text-purple-400">{game.title}</h3>
                 <p className="text-gray-300 text-sm mt-1">{game.description}</p>
                 {!game.comingSoon && (
                   <p className="text-gray-300 text-sm mt-2">
-                    Best Score: <span className="text-cyan-400">{gameScores[game.id] || 0} Gmeow</span>
+                    Best Score: <span className="text-cyan-400 font-bold">{gameScores[game.id] || 0} Gmeow</span>
                   </p>
                 )}
                 <Link
                   href={`/dashboard/games/${game.id}`}
-                  className={`mt-4 inline-block px-6 py-2 rounded-lg text-white font-semibold transition-all duration-200 transform hover:scale-105 ${
+                  className={`mt-4 inline-block px-4 py-2 md:px-6 md:py-2 rounded-lg text-sm md:text-base font-semibold text-white transition-all duration-200 transform hover:scale-105 ${
                     game.comingSoon
                       ? 'bg-gray-600 cursor-not-allowed'
-                      : 'bg-gradient-to-r from-purple-700 to-purple-500 hover:from-purple-600 hover:to-purple-400'
+                      : 'bg-gradient-to-r from-purple-600 to-cyan-500 hover:from-purple-500 hover:to-cyan-400'
                   }`}
                   prefetch={true}
                 >

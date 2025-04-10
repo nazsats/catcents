@@ -45,7 +45,7 @@ export default function Proposals() {
     try {
       const propQuery = query(collection(db, 'proposals'), orderBy('date', 'desc'));
       const propSnapshot = await getDocs(propQuery);
-      console.log('Fetched proposals:', propSnapshot.docs.map(doc => doc.data()));
+      console.log('Fetched proposals:', propSnapshot.docs.map((doc) => doc.data()));
 
       if (propSnapshot.empty) {
         console.log('Initializing demo proposals...');
@@ -103,6 +103,7 @@ export default function Proposals() {
     } catch (error) {
       console.error('Failed to fetch proposals:', error);
       setError('Failed to load proposals: ' + (error as Error).message);
+      toast.error('Failed to load proposals.');
     } finally {
       setIsLoading(false);
     }
@@ -228,7 +229,7 @@ export default function Proposals() {
       case 'Latest':
         return sorted;
       case 'Trending':
-        return sorted.sort((a, b) => (b.yesVotes + b.noVotes) - (a.yesVotes + a.noVotes));
+        return sorted.sort((a, b) => b.yesVotes + b.noVotes - (a.yesVotes + a.noVotes));
       case 'Win':
         return sorted.filter((prop) => prop.yesVotes > prop.noVotes);
       case 'Lose':
@@ -257,40 +258,51 @@ export default function Proposals() {
   return (
     <div className="flex min-h-screen bg-gradient-to-br from-black to-purple-950 text-white">
       <Sidebar onDisconnect={disconnectWallet} />
-      <main className="flex-1 p-8">
+      <main className="flex-1 p-4 md:p-8">
         <Toaster position="top-right" toastOptions={{ style: { background: '#1a1a1a', color: '#fff', border: '1px solid #9333ea' } }} />
-        <div className="flex justify-between items-center mb-8">
-          <h2 className="text-xl font-semibold text-purple-300">Proposals</h2>
-          <Profile
-            account={account}
-            onCopyAddress={handleCopyAddress} // Updated with function
-            onDisconnect={disconnectWallet} // Added missing prop
-          />
-        </div>
-
-        {error && <div className="text-red-400 mb-4">{error}</div>}
-
-        <div className="bg-black/80 rounded-lg p-6 border border-purple-900 mb-8">
-          <h3 className="text-lg font-semibold text-purple-400 mb-4">Your Voting Stats</h3>
-          <div className="flex justify-between">
-            <p className="text-gray-300">Votes Cast: <span className="text-cyan-400 font-bold">{votesCast}</span></p>
-            <p className="text-gray-300">Points Earned: <span className="text-cyan-400 font-bold">{pointsEarned} Gmeow</span></p>
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-8 gap-4">
+          <h2 className="text-2xl md:text-3xl font-bold text-purple-300">Proposals</h2>
+          <div className="ml-auto">
+            <Profile account={account} onCopyAddress={handleCopyAddress} onDisconnect={disconnectWallet} />
           </div>
         </div>
 
-        <div className="flex space-x-4 mb-6">
+        {error && (
+          <div className="p-4 rounded-lg mb-6 bg-red-900/80 text-red-200 border border-red-500 text-center">{error}</div>
+        )}
+
+        <div className="bg-black/90 rounded-xl p-6 border border-purple-900 shadow-md shadow-purple-500/20 mb-6 md:mb-8">
+          <h3 className="text-lg md:text-xl font-semibold text-purple-400 mb-4">Your Voting Stats</h3>
+          <div className="flex flex-col sm:flex-row justify-between gap-4">
+            <p className="text-gray-300">
+              Votes Cast: <span className="text-cyan-400 font-bold">{votesCast}</span>
+            </p>
+            <p className="text-gray-300">
+              Points Earned: <span className="text-cyan-400 font-bold">{pointsEarned} Gmeow</span>
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2 md:gap-4 mb-6">
           {['All', 'Latest', 'Trending', 'Win', 'Lose'].map((cat) => (
             <button
               key={cat}
-              onClick={() => { setCategory(cat); setCurrentPage(1); }}
-              className={`px-4 py-2 rounded-full text-sm font-semibold ${category === cat ? 'bg-purple-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
+              onClick={() => {
+                setCategory(cat);
+                setCurrentPage(1);
+              }}
+              className={`px-3 py-1 md:px-4 md:py-2 rounded-full text-sm md:text-base font-semibold transition-all duration-200 ${
+                category === cat
+                  ? 'bg-gradient-to-r from-purple-600 to-cyan-500 text-white'
+                  : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+              }`}
             >
               {cat}
             </button>
           ))}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
           {paginatedProposals.map((proposal) => {
             const totalVotes = proposal.yesVotes + proposal.noVotes;
             const yesPercentage = totalVotes > 0 ? (proposal.yesVotes / totalVotes) * 100 : 0;
@@ -300,31 +312,45 @@ export default function Proposals() {
             return (
               <div
                 key={proposal.id}
-                className="bg-black/80 rounded-lg border border-purple-900 shadow-lg shadow-purple-500/20 hover:shadow-purple-500/40 transition-all duration-300 overflow-hidden max-w-sm min-h-[400px] flex flex-col"
+                className="bg-black/90 rounded-xl border border-purple-900 shadow-md shadow-purple-500/20 hover:shadow-purple-500/40 transition-all duration-300 overflow-hidden flex flex-col"
               >
                 {proposal.image && (
-                  <img src={proposal.image} alt={proposal.title} className="w-full h-48 object-cover" onError={(e) => (e.currentTarget.src = '/placeholder.jpg')} />
+                  <img
+                    src={proposal.image}
+                    alt={proposal.title}
+                    className="w-full h-40 sm:h-48 object-cover"
+                    onError={(e) => (e.currentTarget.src = '/placeholder.jpg')}
+                  />
                 )}
                 <div className="p-4 flex flex-col flex-grow">
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-pink-500 rounded-full flex items-center justify-center text-2xl">
+                      <div className="w-8 h-8 md:w-10 md:h-10 bg-gradient-to-br from-purple-600 to-pink-500 rounded-full flex items-center justify-center text-xl md:text-2xl">
                         {getRandomCatEmoji(proposal.author)}
                       </div>
                       <div>
-                        <h3 className="text-lg font-semibold text-purple-400">{proposal.title}</h3>
-                        <p className="text-sm text-cyan-400 italic">By {proposal.author}</p>
+                        <h3 className="text-base md:text-lg font-semibold text-purple-400">{proposal.title}</h3>
+                        <p className="text-xs md:text-sm text-cyan-400 italic">By {proposal.author}</p>
                       </div>
                     </div>
-                    <div className={`text-white text-xs font-bold px-3 py-1 rounded-full ${status === 'Winning' ? 'bg-green-500' : status === 'Losing' ? 'bg-red-500' : 'bg-yellow-500'}`}>
+                    <div
+                      className={`text-white text-xs font-bold px-2 py-1 rounded-full ${
+                        status === 'Winning' ? 'bg-green-500' : status === 'Losing' ? 'bg-red-500' : 'bg-yellow-500'
+                      }`}
+                    >
                       {status}
                     </div>
                   </div>
-                  <div className={`transition-all duration-500 ${proposal.isExpanded ? 'max-h-96' : 'max-h-16'} overflow-hidden whitespace-pre-wrap`}>
+                  <div
+                    className={`transition-all duration-500 ${proposal.isExpanded ? 'max-h-96' : 'max-h-16'} overflow-hidden whitespace-pre-wrap`}
+                  >
                     <p className="text-gray-300 text-sm">{proposal.content}</p>
                   </div>
                   {proposal.content.length > contentPreviewLength && (
-                    <button onClick={() => handleShowMore(proposal.id)} className="text-purple-400 hover:text-purple-300 text-sm mt-2">
+                    <button
+                      onClick={() => handleShowMore(proposal.id)}
+                      className="text-purple-400 hover:text-purple-300 text-sm mt-2"
+                    >
                       {proposal.isExpanded ? 'Collapse' : 'Expand'}
                     </button>
                   )}
@@ -332,11 +358,11 @@ export default function Proposals() {
                 <div className="p-4 mt-auto border-t border-purple-900/50">
                   <div className="space-y-2">
                     <div>
-                     辖        <div className="flex justify-between text-xs text-gray-300 mb-1">
+                      <div className="flex justify-between text-xs text-gray-300 mb-1">
                         <span>Yes: {proposal.yesVotes}</span>
                         <span>{yesPercentage.toFixed(1)}%</span>
                       </div>
-                      <div className="w-full bg-gray-700 rounded-full h-3 overflow-hidden">
+                      <div className="w-full bg-gray-700 rounded-full h-2 md:h-3 overflow-hidden">
                         <div className="bg-green-500 h-full" style={{ width: `${yesPercentage}%` }} />
                       </div>
                     </div>
@@ -345,43 +371,55 @@ export default function Proposals() {
                         <span>No: {proposal.noVotes}</span>
                         <span>{noPercentage.toFixed(1)}%</span>
                       </div>
-                      <div className="w-full bg-gray-700 rounded-full h-3 overflow-hidden">
+                      <div className="w-full bg-gray-700 rounded-full h-2 md:h-3 overflow-hidden">
                         <div className="bg-red-500 h-full" style={{ width: `${noPercentage}%` }} />
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center justify-between mt-4">
-                    <div className="flex space-x-2">
-                      {proposal.votedByUser ? (
-                        <span className="text-gray-400 text-sm font-semibold px-4 py-2 bg-gray-800 rounded-full">
-                          Vote Cast: {proposal.votedByUser === 'yes' ? 'Yes 👍' : 'No 👎'}
-                        </span>
-                      ) : (
-                        <>
-                          <button
-                            onClick={() => handleVote(proposal.id, 'yes')}
-                            disabled={proposal.isVoting}
-                            className={`px-4 py-2 rounded-full text-white ${proposal.isVoting ? 'bg-gray-600' : 'bg-green-500 hover:bg-green-400'}`}
-                          >
-                            {proposal.isVoting ? 'Voting...' : 'Yes 👍'}
-                          </button>
-                          <button
-                            onClick={() => handleVote(proposal.id, 'no')}
-                            disabled={proposal.isVoting}
-                            className={`px-4 py-2 rounded-full text-white ${proposal.isVoting ? 'bg-gray-600' : 'bg-red-500 hover:bg-red-400'}`}
-                          >
-                            {proposal.isVoting ? 'Voting...' : 'No 👎'}
-                          </button>
-                        </>
-                      )}
-                      <button
-                        onClick={() => handleLike(proposal.id)}
-                        disabled={proposal.likedByUser || proposal.isLiking}
-                        className={`px-3 py-2 rounded-full text-white ${proposal.likedByUser ? 'bg-purple-600' : proposal.isLiking ? 'bg-purple-700 animate-pulse' : 'bg-purple-500 hover:bg-purple-400'}`}
-                      >
-                        {proposal.isLiking ? 'Liking...' : '❤️'}
-                      </button>
-                    </div>
+                  <div className="flex flex-wrap items-center justify-start gap-2 mt-4">
+                    {proposal.votedByUser ? (
+                      <span className="text-gray-400 text-xs md:text-sm font-semibold px-3 py-1 md:px-4 md:py-2 bg-gray-800 rounded-full">
+                        Vote Cast: {proposal.votedByUser === 'yes' ? 'Yes 👍' : 'No 👎'}
+                      </span>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => handleVote(proposal.id, 'yes')}
+                          disabled={proposal.isVoting}
+                          className={`px-3 py-1 md:px-4 md:py-2 rounded-full text-xs md:text-sm font-medium text-white ${
+                            proposal.isVoting
+                              ? 'bg-gray-600 cursor-not-allowed'
+                              : 'bg-gradient-to-r from-green-600 to-green-400 hover:from-green-500 hover:to-green-300'
+                          }`}
+                        >
+                          {proposal.isVoting ? 'Voting...' : 'Yes 👍'}
+                        </button>
+                        <button
+                          onClick={() => handleVote(proposal.id, 'no')}
+                          disabled={proposal.isVoting}
+                          className={`px-3 py-1 md:px-4 md:py-2 rounded-full text-xs md:text-sm font-medium text-white ${
+                            proposal.isVoting
+                              ? 'bg-gray-600 cursor-not-allowed'
+                              : 'bg-gradient-to-r from-red-600 to-red-400 hover:from-red-500 hover:to-red-300'
+                          }`}
+                        >
+                          {proposal.isVoting ? 'Voting...' : 'No 👎'}
+                        </button>
+                      </>
+                    )}
+                    <button
+                      onClick={() => handleLike(proposal.id)}
+                      disabled={proposal.likedByUser || proposal.isLiking}
+                      className={`px-2 py-1 md:px-3 md:py-2 rounded-full text-xs md:text-sm font-medium text-white ${
+                        proposal.likedByUser
+                          ? 'bg-purple-600 cursor-not-allowed'
+                          : proposal.isLiking
+                          ? 'bg-purple-700 animate-pulse'
+                          : 'bg-gradient-to-r from-purple-600 to-cyan-500 hover:from-purple-500 hover:to-cyan-400'
+                      }`}
+                    >
+                      {proposal.isLiking ? 'Liking...' : '❤️'}
+                    </button>
                   </div>
                 </div>
               </div>
@@ -390,19 +428,19 @@ export default function Proposals() {
         </div>
 
         {totalPages > 1 && (
-          <div className="flex justify-center items-center space-x-4 mt-8">
+          <div className="flex justify-center items-center space-x-4 mt-6 md:mt-8">
             <button
               onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
               disabled={currentPage === 1}
-              className="px-4 py-2 bg-gray-800 text-gray-300 rounded-full disabled:opacity-50 hover:bg-gray-700"
+              className="px-3 py-1 md:px-4 md:py-2 bg-gray-800 text-gray-300 rounded-full text-sm md:text-base font-semibold disabled:opacity-50 hover:bg-gray-700 transition-all duration-200"
             >
               Previous
             </button>
-            <span className="text-gray-300">Page {currentPage} of {totalPages}</span>
+            <span className="text-gray-300 text-sm md:text-base">Page {currentPage} of {totalPages}</span>
             <button
               onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
               disabled={currentPage === totalPages}
-              className="px-4 py-2 bg-gray-800 text-gray-300 rounded-full disabled:opacity-50 hover:bg-gray-700"
+              className="px-3 py-1 md:px-4 md:py-2 bg-gray-800 text-gray-300 rounded-full text-sm md:text-base font-semibold disabled:opacity-50 hover:bg-gray-700 transition-all duration-200"
             >
               Next
             </button>

@@ -186,10 +186,14 @@ export default function Minesweeper() {
         const gmeowProfit = Math.floor(newPoints - INITIAL_BET);
 
         if (newPoints > (data.minesweeperBestScore || 0)) {
-          transaction.set(userDocRef, {
-            minesweeperBestScore: newPoints,
-            gamesGmeow: (data.gamesGmeow || 0) + gmeowProfit,
-          }, { merge: true });
+          transaction.set(
+            userDocRef,
+            {
+              minesweeperBestScore: newPoints,
+              gamesGmeow: (data.gamesGmeow || 0) + gmeowProfit,
+            },
+            { merge: true }
+          );
           setBestScore(newPoints);
         } else if (newPoints > INITIAL_BET) {
           transaction.update(userDocRef, { gamesGmeow: increment(gmeowProfit) });
@@ -271,24 +275,32 @@ export default function Minesweeper() {
   return (
     <div className="flex min-h-screen bg-gradient-to-br from-black to-purple-950 text-white">
       <Sidebar onDisconnect={disconnectWallet} />
-      <main className="flex-1 p-8">
+      <main className="flex-1 p-4 md:p-8">
         <Toaster position="top-right" toastOptions={{ style: { background: '#1a1a1a', color: '#fff', border: '1px solid #9333ea' } }} />
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-purple-300">Minesweeper</h1>
-          <Profile
-            account={account}
-            onCopyAddress={handleCopyAddress}
-            onDisconnect={disconnectWallet} // Added missing prop
-          />
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-8 gap-4">
+          <h1 className="text-2xl md:text-3xl font-bold text-purple-300">Cat Sweeper</h1>
+          <div className="ml-auto">
+            <Profile account={account} onCopyAddress={handleCopyAddress} onDisconnect={disconnectWallet} />
+          </div>
         </div>
 
-        <div className="flex justify-between mb-6">
-          <p className="text-lg">Points: <span className="text-cyan-400 font-bold">{points}</span></p>
-          <p className="text-lg">Best Score: <span className="text-cyan-400 font-bold">{bestScore}</span></p>
+        <div className="bg-black/90 rounded-xl p-6 border border-purple-900 shadow-md shadow-purple-500/20 mb-6 md:mb-8">
+          <h3 className="text-lg md:text-xl font-semibold text-purple-400 mb-4">Your Stats</h3>
+          <div className="flex flex-col sm:flex-row justify-between gap-4">
+            <p className="text-gray-300">
+              Points: <span className="text-cyan-400 font-bold">{points}</span>
+            </p>
+            <p className="text-gray-300">
+              Best Score: <span className="text-cyan-400 font-bold">{bestScore}</span>
+            </p>
+          </div>
         </div>
 
-        <div className="flex justify-center">
-          <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${GRID_SIZE}, 40px)` }}>
+        <div className="flex justify-center mb-6 md:mb-8">
+          <div
+            className="grid gap-0.5 md:gap-1 bg-gray-900/80 p-2 rounded-xl border border-purple-900 w-full sm:w-auto"
+            style={{ gridTemplateColumns: `repeat(${GRID_SIZE}, minmax(0, 1fr))`, maxWidth: '400px' }}
+          >
             {grid.map((row, rowIndex) =>
               row.map((cell: any, colIndex: number) => (
                 <button
@@ -298,14 +310,14 @@ export default function Minesweeper() {
                     e.preventDefault();
                     toggleFlag(rowIndex, colIndex);
                   }}
-                  className={`w-10 h-10 border border-purple-900 rounded-lg flex items-center justify-center text-sm font-semibold transition-all duration-200 ${
+                  className={`w-full aspect-square md:w-10 md:h-10 text-xs md:text-sm font-semibold transition-all duration-200 border border-purple-900/50 rounded-md flex items-center justify-center ${
                     cell.isRevealed
                       ? cell.isMine
-                        ? 'bg-red-600'
-                        : 'bg-gray-700'
+                        ? 'bg-red-600/80'
+                        : 'bg-gray-700/80'
                       : cell.isFlagged
-                      ? 'bg-yellow-600'
-                      : 'bg-gray-800 hover:bg-gray-700'
+                      ? 'bg-yellow-600/80'
+                      : 'bg-gray-800/80 hover:bg-gray-700/80'
                   }`}
                   disabled={gameOver || !gameStarted}
                 >
@@ -324,32 +336,48 @@ export default function Minesweeper() {
           </div>
         </div>
 
-        <div className="flex justify-center space-x-4 mt-6">
+        <div className="flex flex-wrap justify-center gap-2 md:gap-4 mt-6">
           {!gameStarted ? (
             <button
               onClick={placeBet}
               disabled={isBetting}
-              className={`bg-purple-600 px-6 py-3 rounded-lg text-white ${isBetting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-purple-500'} transition-colors`}
+              className={`px-4 py-2 md:px-6 md:py-3 rounded-lg text-sm md:text-base font-semibold text-white transition-all duration-200 ${
+                isBetting
+                  ? 'bg-gray-600 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-purple-600 to-cyan-500 hover:from-purple-500 hover:to-cyan-400'
+              }`}
             >
-              {isBetting ? 'Processing...' : 'Place Bet (0.01 MON)'}
+              {isBetting ? (
+                <span className="flex items-center justify-center">
+                  <svg className="animate-spin h-5 w-5 mr-2" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                  </svg>
+                  Placing Bet...
+                </span>
+              ) : (
+                'Place Bet (0.01 MON)'
+              )}
             </button>
           ) : (
             <>
               <button
                 onClick={updateScores}
                 disabled={gameOver || points <= INITIAL_BET || isCashout}
-                className={`px-6 py-2 rounded-lg text-white ${
-                  gameOver || points <= INITIAL_BET || isCashout ? 'bg-gray-600' : 'bg-green-500 hover:bg-green-400'
+                className={`px-4 py-2 md:px-6 md:py-3 rounded-lg text-sm md:text-base font-semibold text-white transition-all duration-200 ${
+                  gameOver || points <= INITIAL_BET || isCashout
+                    ? 'bg-gray-600 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-green-600 to-green-400 hover:from-green-500 hover:to-green-300'
                 }`}
               >
-                {isCashout ? 'Cashed' : 'Cash Out'}
+                {isCashout ? 'Cashed Out' : 'Cash Out'}
               </button>
               <button
                 onClick={() => {
                   setGameStarted(false);
                   initializeGrid();
                 }}
-                className="px-6 py-2 rounded-lg bg-purple-600 text-white hover:bg-purple-500"
+                className="px-4 py-2 md:px-6 md:py-3 rounded-lg text-sm md:text-base font-semibold text-white bg-gradient-to-r from-purple-600 to-cyan-500 hover:from-purple-500 hover:to-cyan-400 transition-all duration-200"
               >
                 New Game
               </button>
@@ -357,13 +385,13 @@ export default function Minesweeper() {
                 <>
                   <button
                     onClick={withdrawFunds}
-                    className="px-6 py-2 rounded-lg bg-red-600 text-white hover:bg-red-500"
+                    className="px-4 py-2 md:px-6 md:py-3 rounded-lg text-sm md:text-base font-semibold text-white bg-gradient-to-r from-red-600 to-red-400 hover:from-red-500 hover:to-red-300 transition-all duration-200"
                   >
                     Withdraw Funds
                   </button>
                   <button
                     onClick={checkBalance}
-                    className="px-6 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-500"
+                    className="px-4 py-2 md:px-6 md:py-3 rounded-lg text-sm md:text-base font-semibold text-white bg-gradient-to-r from-blue-600 to-blue-400 hover:from-blue-500 hover:to-blue-300 transition-all duration-200"
                   >
                     Check Balance
                   </button>

@@ -7,6 +7,7 @@ import Sidebar from '../../components/Sidebar';
 import Profile from '../../components/Profile';
 import confetti from 'canvas-confetti';
 import { useWeb3Modal } from '../../lib/Web3ModalContext';
+import toast, { Toaster } from 'react-hot-toast';
 
 const INITIAL_QUESTS = [
   { id: 'connect_twitter', title: 'Connect Twitter', description: 'Link your Twitter account', meowMiles: 20, completed: false, icon: '🔗' },
@@ -25,7 +26,6 @@ export default function QuestsPage() {
   const [referrals, setReferrals] = useState(0);
   const [referralLink, setReferralLink] = useState('');
   const [isLoading, setIsLoading] = useState(true);
-  const [message, setMessage] = useState<string | null>(null);
   const [processingQuestId, setProcessingQuestId] = useState<string | null>(null);
   const router = useRouter();
   const [hasRedirected, setHasRedirected] = useState(false);
@@ -61,7 +61,7 @@ export default function QuestsPage() {
       }
     } catch (error) {
       console.error('Error fetching user data:', error);
-      setMessage('Failed to load quests.');
+      toast.error('Failed to load quests. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -83,23 +83,27 @@ export default function QuestsPage() {
 
     confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
 
-    const newQuests = quests.map((q) =>
-      q.id === questId ? { ...q, completed: true } : q
-    );
+    const newQuests = quests.map((q) => (q.id === questId ? { ...q, completed: true } : q));
     const newMeowMiles = (currentData.meowMiles || 0) + quest.meowMiles;
 
     setQuests(newQuests);
     setMeowMiles(newMeowMiles);
     setProcessingQuestId(null);
 
-    await setDoc(
-      userRef,
-      {
-        meowMiles: newMeowMiles,
-        quests: { ...currentQuests, [questId]: true },
-      },
-      { merge: true }
-    );
+    try {
+      await setDoc(
+        userRef,
+        {
+          meowMiles: newMeowMiles,
+          quests: { ...currentQuests, [questId]: true },
+        },
+        { merge: true }
+      );
+    } catch (error) {
+      console.error('Failed to complete quest:', error);
+      toast.error('Failed to complete quest.');
+      setQuests(quests); // Revert local state on failure
+    }
   };
 
   const handleTaskStart = async (quest: typeof INITIAL_QUESTS[0]) => {
@@ -120,15 +124,13 @@ export default function QuestsPage() {
 
   const handleCopyReferralLink = () => {
     navigator.clipboard.writeText(referralLink);
-    setMessage('Referral link copied!');
-    setTimeout(() => setMessage(null), 2000);
+    toast.success('Referral link copied!');
   };
 
   const handleCopyAddress = () => {
     if (account) {
       navigator.clipboard.writeText(account);
-      setMessage('Address copied!');
-      setTimeout(() => setMessage(null), 2000);
+      toast.success('Address copied!');
     }
   };
 
@@ -149,10 +151,10 @@ export default function QuestsPage() {
       const success = urlParams.get('success');
       if (success) {
         if (success === 'twitter_connected') {
-          setMessage('Twitter connected successfully!');
+          toast.success('Twitter connected successfully!');
           completeQuest('connect_twitter');
         } else if (success === 'discord_connected') {
-          setMessage('Discord connected successfully!');
+          toast.success('Discord connected successfully!');
           completeQuest('connect_discord');
         }
         router.replace('/dashboard/quests');
@@ -160,105 +162,129 @@ export default function QuestsPage() {
 
       const error = urlParams.get('error');
       if (error === 'twitter_failed') {
-        setMessage('Failed to connect Twitter.');
+        toast.error('Failed to connect Twitter.');
       } else if (error === 'discord_failed') {
-        setMessage('Failed to connect Discord.');
+        toast.error('Failed to connect Discord.');
       }
     }
   }, [account, loading, router, hasRedirected]);
 
   if (loading || isLoading) {
-    return <div className="flex min-h-screen items-center justify-center bg-gray-900 text-white">Loading...</div>;
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-black to-purple-950 text-white">
+        <svg className="animate-spin h-8 w-8 text-purple-400" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+        </svg>
+      </div>
+    );
   }
 
   if (!account) return null;
 
   return (
-    <div className="flex min-h-screen bg-gradient-to-br from-gray-900 to-purple-900 text-white">
+    <div className="flex min-h-screen bg-gradient-to-br from-black to-purple-950 text-white">
       <Sidebar onDisconnect={disconnectWallet} />
-      <main className="flex-1 p-8">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-purple-300">Catcents Quests</h1>
-          <Profile
-            account={account}
-            onCopyAddress={handleCopyAddress}
-            onDisconnect={disconnectWallet} // Added missing prop
-          />
+      <main className="flex-1 p-4 md:p-8">
+        <Toaster position="top-right" toastOptions={{ style: { background: '#1a1a1a', color: '#fff', border: '1px solid #9333ea' } }} />
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-8 gap-4">
+          <h1 className="text-2xl md:text-3xl font-bold text-purple-300">Catcents Quests</h1>
+          <div className="ml-auto">
+            <Profile account={account} onCopyAddress={handleCopyAddress} onDisconnect={disconnectWallet} />
+          </div>
         </div>
 
-        {message && (
-          <p className={`p-4 rounded-lg mb-6 ${message.includes('success') || message.includes('copied') ? 'bg-green-800 text-green-200' : 'bg-red-800 text-red-200'}`}>
-            {message}
-          </p>
-        )}
-
-        <div className="bg-gray-800 rounded-xl p-6 shadow-lg shadow-purple-500/20">
-          <div className="text-center mb-8">
-            <h2 className="text-2xl font-semibold text-purple-300">Your Meow Miles</h2>
-            <p className="text-4xl font-bold text-cyan-400 mt-2">{meowMiles}</p>
+        <div className="space-y-6 md:space-y-8">
+          <div className="text-center">
+            <h2 className="text-xl md:text-2xl font-semibold text-purple-400">Your Meow Miles</h2>
+            <p className="text-3xl md:text-4xl font-extrabold bg-gradient-to-r from-purple-500 via-pink-500 to-cyan-400 bg-clip-text text-transparent animate-pulse-slow mt-2">
+              {meowMiles}
+            </p>
           </div>
 
-          <h3 className="text-xl font-semibold mb-4 text-purple-300">Quests</h3>
-          <div className="grid gap-4">
-            {quests.map((quest) => (
-              <div
-                key={quest.id}
-                className="flex items-center justify-between bg-gray-700 p-4 rounded-lg hover:bg-gray-600 transition-all duration-200"
-              >
-                <div className="flex items-center space-x-4">
-                  <span className="text-2xl">{quest.icon}</span>
-                  <div>
-                    <p className="text-lg font-semibold text-purple-200">{quest.title}</p>
-                    <p className="text-sm text-gray-300">{quest.description}</p>
+          <div>
+            <h3 className="text-lg md:text-xl font-semibold mb-4 text-purple-400">Quests</h3>
+            <div className="space-y-4">
+              {quests.map((quest) => (
+                <div
+                  key={quest.id}
+                  className="flex items-center justify-between py-2 border-b border-purple-900/50 last:border-b-0"
+                >
+                  <div className="flex items-center space-x-3">
+                    <span className="text-2xl md:text-3xl">{quest.icon}</span>
+                    <div>
+                      <p className="text-base md:text-lg font-semibold text-purple-200">{quest.title}</p>
+                      <p className="text-sm text-gray-300">{quest.description}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2 sm:space-x-3 shrink-0">
+                    <p className="text-cyan-400 font-medium text-sm md:text-base">{quest.meowMiles} Miles</p>
+                    <button
+                      onClick={() => handleTaskStart(quest)}
+                      disabled={quest.completed || processingQuestId === quest.id}
+                      className={`px-3 py-1 md:px-4 md:py-2 rounded-lg font-medium text-sm md:text-base transition-all duration-200 whitespace-nowrap ${
+                        quest.completed
+                          ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                          : processingQuestId === quest.id
+                          ? 'bg-yellow-600 text-white cursor-not-allowed'
+                          : 'bg-gradient-to-r from-purple-600 to-cyan-500 text-white hover:from-purple-500 hover:to-cyan-400'
+                      }`}
+                    >
+                      {quest.completed
+                        ? 'Completed'
+                        : processingQuestId === quest.id
+                        ? 'Processing'
+                        : quest.id === 'connect_twitter'
+                        ? 'Connect Twitter'
+                        : quest.id === 'connect_discord'
+                        ? 'Connect Discord'
+                        : 'Start'}
+                    </button>
                   </div>
                 </div>
-                <div className="flex items-center space-x-3">
-                  <p className="text-cyan-400 font-medium">{quest.meowMiles} Miles</p>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-lg md:text-xl font-semibold mb-4 text-purple-400">Refer Friends</h3>
+            <div className="bg-black/90 rounded-xl p-6 border border-purple-900 shadow-md shadow-purple-500/20 hover:shadow-purple-500/40 transition-shadow duration-300">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="text-center sm:text-left">
+                  <p className="text-base md:text-lg font-semibold text-purple-200">Invite Friends</p>
+                  <p className="text-sm text-gray-300 mt-1">
+                    Earn <span className="text-cyan-400 font-bold">50 Meow Miles</span> per referral! ({referrals}{' '}
+                    referrals, <span className="text-cyan-400 font-bold">{referrals * 50} Miles</span> earned)
+                  </p>
+                </div>
+                <div className="flex items-center space-x-3 w-full sm:w-auto">
+                  <input
+                    type="text"
+                    value={referralLink}
+                    readOnly
+                    className="w-full sm:w-64 p-2 bg-gray-700/80 text-gray-200 rounded-lg border border-purple-900 focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                  />
                   <button
-                    onClick={() => handleTaskStart(quest)}
-                    disabled={quest.completed || processingQuestId === quest.id}
-                    className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
-                      quest.completed
-                        ? 'bg-gray-500 text-gray-300 cursor-not-allowed'
-                        : processingQuestId === quest.id
-                        ? 'bg-yellow-600 text-white cursor-not-allowed'
-                        : 'bg-purple-600 text-white hover:bg-purple-500'
-                    }`}
+                    onClick={handleCopyReferralLink}
+                    className="flex items-center justify-center space-x-2 px-4 py-2 bg-gradient-to-r from-purple-700 to-cyan-500 text-white rounded-lg font-semibold hover:from-purple-600 hover:to-cyan-400 transition-all duration-300 whitespace-nowrap"
                   >
-                    {quest.completed
-                      ? 'Completed'
-                      : processingQuestId === quest.id
-                      ? 'Processing'
-                      : quest.id === 'connect_twitter'
-                      ? 'Connect Twitter'
-                      : quest.id === 'connect_discord'
-                      ? 'Connect Discord'
-                      : 'Start'}
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-5 w-5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                      />
+                    </svg>
+                    <span>Copy Link</span>
                   </button>
                 </div>
               </div>
-            ))}
-          </div>
-
-          <h3 className="text-xl font-semibold mt-8 mb-4 text-purple-300">Refer Friends</h3>
-          <div className="bg-gray-700 p-4 rounded-lg">
-            <p className="text-lg font-semibold text-purple-200">Invite Friends</p>
-            <p className="text-sm text-gray-300 mb-4">
-              Earn 50 Meow Miles per referral! ({referrals} referrals, {referrals * 50} Meow Miles earned)
-            </p>
-            <div className="flex items-center space-x-3">
-              <input
-                type="text"
-                value={referralLink}
-                readOnly
-                className="w-full p-2 bg-gray-600 text-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-              />
-              <button
-                onClick={handleCopyReferralLink}
-                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-500 transition-all duration-200"
-              >
-                Copy Link
-              </button>
             </div>
           </div>
         </div>

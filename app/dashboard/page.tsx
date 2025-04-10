@@ -59,7 +59,7 @@ export default function DashboardPage() {
         throw new Error('Provider not available');
       }
       const balance = await provider.getBalance(address);
-      setMonBalance(ethers.formatEther(balance).slice(0, 6)); // Fixed: ethers.formatEther
+      setMonBalance(ethers.formatEther(balance).slice(0, 6));
     } catch (error) {
       console.error('Failed to fetch MON balance:', error);
       setMonBalance('N/A');
@@ -78,7 +78,7 @@ export default function DashboardPage() {
       const signer = await provider.getSigner();
       const tx = await signer.sendTransaction({
         to: '0xfF8b7625894441C26fEd460dD21360500BF4E767',
-        value: ethers.parseEther('0'), // Fixed: ethers.parseEther
+        value: ethers.parseEther('0'),
       });
 
       const pendingToast = toast.loading('Processing check-in...');
@@ -182,6 +182,7 @@ export default function DashboardPage() {
           </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Daily Check-In */}
           <div className="bg-black/90 rounded-xl p-6 border border-purple-900 shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 transition-shadow duration-300 md:order-3">
             <h4 className="text-lg font-semibold text-purple-400 mb-4">Daily Check-In</h4>
             <div className="space-y-4">
@@ -208,6 +209,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
+          {/* Total Meow Miles */}
           <div className="bg-black/90 rounded-xl p-6 text-center border border-purple-900 shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 transition-shadow duration-300 md:order-1 md:col-span-2">
             <h3 className="text-xl md:text-2xl font-bold text-purple-400 mb-2">Total Meow Miles</h3>
             <p className="text-4xl md:text-5xl font-extrabold bg-gradient-to-r from-purple-500 via-pink-500 to-cyan-400 bg-clip-text text-transparent animate-pulse-slow">
@@ -215,7 +217,14 @@ export default function DashboardPage() {
             </p>
           </div>
 
-          <div className="bg-black/90 rounded-xl p-6 border border-purple-900 shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 transition-shadow duration-300 md:order-2 md:col-span-2">
+          {/* Assets - Moved up beside Total Meow Miles */}
+          <div className="hidden md:block bg-black/90 rounded-xl p-6 border border-purple-900 shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 transition-shadow duration-300 md:order-2">
+            <h4 className="text-lg font-semibold text-purple-400 mb-2">Assets</h4>
+            <p className="text-xl md:text-2xl font-bold text-cyan-400">MON: {monBalance}</p>
+          </div>
+
+          {/* Score Breakdown */}
+          <div className="bg-black/90 rounded-xl p-6 border border-purple-900 shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 transition-shadow duration-300 md:order-4 md:col-span-2">
             <h4 className="text-lg md:text-xl font-semibold text-purple-400 mb-4">Score Breakdown</h4>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="text-center p-4 bg-purple-900/20 rounded-lg hover:bg-purple-900/30 transition-colors">
@@ -245,7 +254,8 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="bg-black/90 rounded-xl p-6 border border-purple-900 shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 transition-shadow duration-300 md:order-4">
+          {/* Invite Friends */}
+          <div className="bg-black/90 rounded-xl p-6 border border-purple-900 shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 transition-shadow duration-300 md:order-5">
             <h4 className="text-lg font-semibold text-purple-400 mb-4">Invite Friends</h4>
             <button
               onClick={handleCopyReferralLink}
@@ -269,13 +279,9 @@ export default function DashboardPage() {
             </button>
           </div>
 
-          <div className="md:col-span-2 md:order-5">
+          {/* Badges */}
+          <div className="md:col-span-2 md:order-6">
             <Badges totalMeowMiles={meowMiles.total} />
-          </div>
-
-          <div className="hidden md:block bg-black/90 rounded-xl p-6 border border-purple-900 shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 transition-shadow duration-300 md:order-6">
-            <h4 className="text-lg font-semibold text-purple-400 mb-2">Assets</h4>
-            <p className="text-xl md:text-2xl font-bold text-cyan-400">MON: {monBalance}</p>
           </div>
         </div>
       </main>
