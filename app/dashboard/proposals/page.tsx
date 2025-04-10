@@ -2,17 +2,18 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { db } from '../../lib/firebase';
-import { doc, getDoc, setDoc, collection, getDocs, query, orderBy, Timestamp, increment } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, getDocs, query, orderBy, Timestamp, increment, addDoc } from 'firebase/firestore';
 import { ethers } from 'ethers';
 import Sidebar from '../../components/Sidebar';
 import Profile from '../../components/Profile';
 import { useWeb3Modal } from '../../lib/Web3ModalContext';
 import toast, { Toaster } from 'react-hot-toast';
+import Image from 'next/image';
 
 const DEMO_PROPOSALS = [
-  { author: 'CatLord', title: 'Decentralized Node Hub', content: 'Deploy validator nodes.', date: new Date().toISOString(), image: 'https://picsum.photos/200/300?random=1', yesVotes: 0, noVotes: 0 },
-  { author: 'PurrMaster', title: 'DeFi Incubator', content: 'Fund DeFi development.', date: new Date(Date.now() - 86400000).toISOString(), image: 'https://picsum.photos/200/300?random=2', yesVotes: 0, noVotes: 0 },
-  { author: 'WhiskerWizard', title: 'Cross-Chain Bridge', content: 'Connect Monad to other chains.', date: new Date(Date.now() - 2 * 86400000).toISOString(), image: 'https://picsum.photos/200/300?random=3', yesVotes: 0, noVotes: 0 },
+  { author: 'CatLord', title: 'Decentralized Node Hub', content: 'Deploy validator nodes.', date: new Date().toISOString(), image: '/proposals/1.png', yesVotes: 0, noVotes: 0 },
+  { author: 'PurrMaster', title: 'DeFi Incubator', content: 'Fund DeFi development.', date: new Date(Date.now() - 86400000).toISOString(), image: '/proposals/2.png', yesVotes: 0, noVotes: 0 },
+  { author: 'WhiskerWizard', title: 'Cross-Chain Bridge', content: 'Connect Monad to other chains.', date: new Date(Date.now() - 2 * 86400000).toISOString(), image: '/proposals/3.png', yesVotes: 0, noVotes: 0 },
 ];
 
 const ADMIN_WALLET = '0x6D54EF5Fa17d69717Ff96D2d868e040034F26024'.toLowerCase();
@@ -50,7 +51,11 @@ export default function Proposals() {
       if (propSnapshot.empty) {
         console.log('Initializing demo proposals...');
         const addPromises = DEMO_PROPOSALS.map((prop) =>
-          setDoc(doc(collection(db, 'proposals')), { ...prop, date: Timestamp.fromDate(new Date(prop.date)), likes: 0 })
+          addDoc(collection(db, 'proposals'), { 
+            ...prop, 
+            date: Timestamp.fromDate(new Date(prop.date)), 
+            likes: 0 
+          })
         );
         await Promise.all(addPromises);
       }
@@ -73,7 +78,7 @@ export default function Proposals() {
             title: propData.title,
             content: propData.content,
             date: date.toISOString(),
-            image: propData.image || undefined,
+            image: propData.image || '/proposals/placeholder.png',
             yesVotes: propData.yesVotes || 0,
             noVotes: propData.noVotes || 0,
             likedByUser: userLiked,
@@ -85,6 +90,7 @@ export default function Proposals() {
         })
       );
 
+      console.log('Mapped proposals:', fetchedProposals); // Debug log
       setProposals(fetchedProposals);
 
       let totalVotes = 0;
@@ -230,10 +236,6 @@ export default function Proposals() {
         return sorted;
       case 'Trending':
         return sorted.sort((a, b) => b.yesVotes + b.noVotes - (a.yesVotes + a.noVotes));
-      case 'Win':
-        return sorted.filter((prop) => prop.yesVotes > prop.noVotes);
-      case 'Lose':
-        return sorted.filter((prop) => prop.yesVotes < prop.noVotes);
       default:
         return sorted;
     }
@@ -271,6 +273,31 @@ export default function Proposals() {
           <div className="p-4 rounded-lg mb-6 bg-red-900/80 text-red-200 border border-red-500 text-center">{error}</div>
         )}
 
+        <div className="bg-black/90 rounded-xl p-6 border border-purple-900 shadow-md shadow-purple-500/20 mb-6 md:mb-8 flex flex-col-reverse md:flex-row items-center gap-6">
+          <div className="w-full md:w-2/3 text-center md:text-left">
+            <h3 className="text-xl md:text-2xl font-extrabold bg-gradient-to-r from-purple-500 via-pink-500 to-cyan-400 bg-clip-text text-transparent mb-3">
+              Shape the Future of the Ecosystem
+            </h3>
+            <p className="text-sm md:text-base text-gray-300 leading-relaxed">
+              <span className="text-cyan-400 font-semibold">Your voice matters here.</span> Vote on proposals that impact not just{' '}
+              <span className="text-purple-400 font-semibold">Catcents</span>, but the entire ecosystem we’re building together.
+            </p>
+            <p className="text-sm md:text-base text-gray-300 mt-2 leading-relaxed">
+              Earn <span className="text-pink-400 font-semibold">MeowMiles</span>. Influence what’s next.
+            </p>
+            <p className="text-base md:text-lg font-bold text-cyan-400 mt-2">Let’s shape it, together.</p>
+          </div>
+          <div className="w-full md:w-1/3 flex-shrink-0">
+            <Image
+              src="/proposals/character.png"
+              alt="Proposals Character"
+              width={300}
+              height={300}
+              className="w-full h-auto object-contain rounded-lg"
+            />
+          </div>
+        </div>
+
         <div className="bg-black/90 rounded-xl p-6 border border-purple-900 shadow-md shadow-purple-500/20 mb-6 md:mb-8">
           <h3 className="text-lg md:text-xl font-semibold text-purple-400 mb-4">Your Voting Stats</h3>
           <div className="flex flex-col sm:flex-row justify-between gap-4">
@@ -284,7 +311,7 @@ export default function Proposals() {
         </div>
 
         <div className="flex flex-wrap gap-2 md:gap-4 mb-6">
-          {['All', 'Latest', 'Trending', 'Win', 'Lose'].map((cat) => (
+          {['All', 'Latest', 'Trending'].map((cat) => (
             <button
               key={cat}
               onClick={() => {
@@ -319,7 +346,7 @@ export default function Proposals() {
                     src={proposal.image}
                     alt={proposal.title}
                     className="w-full h-40 sm:h-48 object-cover"
-                    onError={(e) => (e.currentTarget.src = '/placeholder.jpg')}
+                    onError={(e) => (e.currentTarget.src = '/proposals/placeholder.png')}
                   />
                 )}
                 <div className="p-4 flex flex-col flex-grow">

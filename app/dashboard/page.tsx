@@ -17,6 +17,7 @@ export default function DashboardPage() {
   const [lastCheckIn, setLastCheckIn] = useState<number | null>(null);
   const [countdown, setCountdown] = useState<string>('24:00:00');
   const [checkingIn, setCheckingIn] = useState(false);
+  const [referralsList, setReferralsList] = useState<string[]>([]);
   const router = useRouter();
 
   const fetchUserData = async (address: string) => {
@@ -42,6 +43,7 @@ export default function DashboardPage() {
         console.log('Setting meowMiles:', newMeowMiles);
         setMeowMiles(newMeowMiles);
         setLastCheckIn(data.lastCheckIn || null);
+        setReferralsList(data.referrals || []);
         if (data.lastCheckIn) startCountdown(data.lastCheckIn);
       } else {
         console.log('No data found in Firebase for address:', address);
@@ -154,6 +156,11 @@ export default function DashboardPage() {
     }
   };
 
+  const shortenAddress = (address: string) => {
+    if (!address) return '';
+    return `${address.slice(0, 7)}...${address.slice(-6)}`;
+  };
+
   useEffect(() => {
     console.log('Dashboard - useEffect - Account:', account, 'Provider:', provider, 'Loading:', loading);
     if (loading) return;
@@ -217,7 +224,7 @@ export default function DashboardPage() {
             </p>
           </div>
 
-          {/* Assets - Moved up beside Total Meow Miles */}
+          {/* Assets */}
           <div className="hidden md:block bg-black/90 rounded-xl p-6 border border-purple-900 shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 transition-shadow duration-300 md:order-2">
             <h4 className="text-lg font-semibold text-purple-400 mb-2">Assets</h4>
             <p className="text-xl md:text-2xl font-bold text-cyan-400">MON: {monBalance}</p>
@@ -259,7 +266,7 @@ export default function DashboardPage() {
             <h4 className="text-lg font-semibold text-purple-400 mb-4">Invite Friends</h4>
             <button
               onClick={handleCopyReferralLink}
-              className="w-full flex items-center justify-center space-x-2 bg-gradient-to-r from-purple-700 to-cyan-500 text-white py-3 rounded-lg font-semibold hover:from-purple-600 hover:to-cyan-400 transition-all duration-300"
+              className="w-full flex items-center justify-center space-x-2 bg-gradient-to-r from-purple-700 to-cyan-500 text-white py-3 rounded-lg font-semibold hover:from-purple-600 hover:to-cyan-400 transition-all duration-300 mb-6"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -277,6 +284,34 @@ export default function DashboardPage() {
               </svg>
               <span>Copy Referral Link</span>
             </button>
+            <div className="space-y-4">
+              <p className="text-sm text-gray-300 font-semibold">Referred Wallets ({referralsList.length})</p>
+              {referralsList.length > 0 ? (
+                <div className="max-h-48 overflow-y-auto rounded-lg border border-purple-900/50 bg-gray-900/80 shadow-inner">
+                  <table className="w-full text-xs md:text-sm">
+                    <thead>
+                      <tr className="bg-gradient-to-r from-purple-900 to-cyan-900 sticky top-0 text-white">
+                        <th className="py-2 px-4 text-left font-semibold">Wallet</th>
+                        <th className="py-2 px-4 text-right font-semibold">Ref #</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {referralsList.map((wallet, index) => (
+                        <tr
+                          key={index}
+                          className="border-t border-purple-900/30 hover:bg-purple-900/20 transition-colors duration-200"
+                        >
+                          <td className="py-3 px-4 text-cyan-400 font-mono">{shortenAddress(wallet)}</td>
+                          <td className="py-3 px-4 text-right text-gray-300">{index + 1}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500 text-center py-4 bg-gray-900/50 rounded-lg">No referrals yet.</p>
+              )}
+            </div>
           </div>
 
           {/* Badges */}

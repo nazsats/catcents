@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { usePathname } from 'next/navigation';
+import Image from 'next/image';
 
 interface SidebarProps {
   onDisconnect: () => void;
@@ -12,9 +13,11 @@ export default function Sidebar({ onDisconnect }: SidebarProps) {
   const pathname = usePathname(); // Get current route
 
   // Define active link styles
-  const getLinkClass = (href: string) =>
+  const getLinkClass = (href: string, disabled: boolean = false) =>
     `flex items-center space-x-3 transition-colors ${
-      pathname === href
+      disabled
+        ? 'text-gray-500 cursor-not-allowed'
+        : pathname === href
         ? 'text-purple-400 font-semibold'
         : 'text-gray-300 hover:text-purple-300'
     }`;
@@ -44,25 +47,58 @@ export default function Sidebar({ onDisconnect }: SidebarProps) {
           </h1>
           <nav className="space-y-4">
             <Link href="/dashboard" className={getLinkClass('/dashboard')}>
-              <span className="text-lg">🏠</span>
+              <Image
+                src="/sidebar/dashboard.png"
+                alt="Dashboard Icon"
+                width={24}
+                height={24}
+                className="w-6 h-6"
+              />
               <span className="text-base">Dashboard</span>
             </Link>
             <Link href="/dashboard/quests" className={getLinkClass('/dashboard/quests')}>
-              <span className="text-lg">📜</span>
+              <Image
+                src="/sidebar/quest.png"
+                alt="Quests Icon"
+                width={24}
+                height={24}
+                className="w-6 h-6"
+              />
               <span className="text-base">Quests</span>
             </Link>
             <Link href="/dashboard/proposals" className={getLinkClass('/dashboard/proposals')}>
-              <span className="text-lg">📋</span>
+              <Image
+                src="/sidebar/proposals.png"
+                alt="Proposals Icon"
+                width={24}
+                height={24}
+                className="w-6 h-6"
+              />
               <span className="text-base">Proposals</span>
             </Link>
             <Link href="/dashboard/games" className={getLinkClass('/dashboard/games')}>
-              <span className="text-lg">🎮</span>
+              <Image
+                src="/sidebar/games.png"
+                alt="Games Icon"
+                width={24}
+                height={24}
+                className="w-6 h-6"
+              />
               <span className="text-base">Games</span>
             </Link>
-            <Link href="/dashboard/nft-staking" className={getLinkClass('/nft-staking')}>
-              <span className="text-lg">🌟</span>
-              <span className="text-base">NFT Staking</span>
-            </Link>
+            <div className={getLinkClass('/dashboard/nft-staking', true)}>
+              <Image
+                src="/sidebar/nft-staking.png"
+                alt="NFT Staking Icon"
+                width={24}
+                height={24}
+                className="w-6 h-6 opacity-50"
+              />
+              <div className="flex items-center space-x-2">
+                <span className="text-base">NFT Staking</span>
+                <span className="text-xs text-yellow-400 bg-gray-800 px-1 rounded">Coming Soon</span>
+              </div>
+            </div>
           </nav>
         </div>
         <button

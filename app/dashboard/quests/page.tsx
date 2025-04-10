@@ -8,15 +8,16 @@ import Profile from '../../components/Profile';
 import confetti from 'canvas-confetti';
 import { useWeb3Modal } from '../../lib/Web3ModalContext';
 import toast, { Toaster } from 'react-hot-toast';
+import Image from 'next/image';
 
 const INITIAL_QUESTS = [
-  { id: 'connect_twitter', title: 'Connect Twitter', description: 'Link your Twitter account', meowMiles: 20, completed: false, icon: '🔗' },
-  { id: 'connect_discord', title: 'Connect Discord', description: 'Link your Discord account', meowMiles: 20, completed: false, icon: '🎮' },
-  { id: 'follow_twitter', title: 'Follow Twitter', description: 'Follow @catcentsio on Twitter', meowMiles: 15, completed: false, icon: '🐦', taskUrl: 'https://twitter.com/catcentsio' },
-  { id: 'share_post', title: 'Share a Post', description: 'Tweet: I love @catcentsio 🐱', meowMiles: 25, completed: false, icon: '✍️', taskUrl: 'https://twitter.com/intent/tweet?text=I%20love%20@catcentsio%20🐱' },
-  { id: 'like_rt', title: 'Like and RT', description: 'Like and retweet our post', meowMiles: 20, completed: false, icon: '❤️', taskUrl: 'https://x.com/CatCentsio/status/1829876735468564912' },
-  { id: 'join_catcents_server', title: 'Join Catcents Server', description: 'Join our Discord server', meowMiles: 20, completed: false, icon: '🎉', taskUrl: 'https://discord.gg/TXPbt7ztMC' },
-  { id: 'join_telegram', title: 'Join Telegram', description: 'Join our Telegram channel', meowMiles: 20, completed: false, icon: '📩', taskUrl: 'https://t.me/catcentsio' },
+  { id: 'connect_twitter', title: 'Connect Twitter', description: 'Link your Twitter account', meowMiles: 30, completed: false, icon: '/quest/link.png' },
+  { id: 'connect_discord', title: 'Connect Discord', description: 'Link your Discord account', meowMiles: 30, completed: false, icon: '/quest/discord.png' },
+  { id: 'follow_twitter', title: 'Follow Twitter', description: 'Follow @catcentsio on Twitter', meowMiles: 30, completed: false, icon: '/quest/x.png', taskUrl: 'https://twitter.com/catcentsio' },
+  { id: 'share_post', title: 'Share a Post', description: 'Tweet: I love @catcentsio 🐱', meowMiles: 30, completed: false, icon: '/quest/post.png', taskUrl: 'https://twitter.com/intent/tweet?text=I%20love%20@catcentsio%20🐱' },
+  { id: 'like_rt', title: 'Like and RT', description: 'Like and retweet our post', meowMiles: 30, completed: false, icon: '/quest/Like.png', taskUrl: 'https://x.com/CatCentsio/status/1829876735468564912' },
+  { id: 'join_catcents_server', title: 'Join Catcents Server', description: 'Join our Discord server', meowMiles: 30, completed: false, icon: '/quest/server.png', taskUrl: 'https://discord.gg/TXPbt7ztMC' },
+  { id: 'join_telegram', title: 'Join Telegram', description: 'Join our Telegram channel', meowMiles: 30, completed: false, icon: '/quest/telegram.png', taskUrl: 'https://t.me/catcentsio' },
 ];
 
 export default function QuestsPage() {
@@ -187,46 +188,59 @@ export default function QuestsPage() {
       <main className="flex-1 p-4 md:p-8">
         <Toaster position="top-right" toastOptions={{ style: { background: '#1a1a1a', color: '#fff', border: '1px solid #9333ea' } }} />
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-8 gap-4">
-          <h1 className="text-2xl md:text-3xl font-bold text-purple-300">Catcents Quests</h1>
+          <h1 className="text-3xl md:text-4xl font-extrabold bg-gradient-to-r from-purple-500 to-cyan-400 bg-clip-text text-transparent">
+            Catcents Quests
+          </h1>
           <div className="ml-auto">
             <Profile account={account} onCopyAddress={handleCopyAddress} onDisconnect={disconnectWallet} />
           </div>
         </div>
 
-        <div className="space-y-6 md:space-y-8">
-          <div className="text-center">
-            <h2 className="text-xl md:text-2xl font-semibold text-purple-400">Your Meow Miles</h2>
-            <p className="text-3xl md:text-4xl font-extrabold bg-gradient-to-r from-purple-500 via-pink-500 to-cyan-400 bg-clip-text text-transparent animate-pulse-slow mt-2">
+        <div className="space-y-8 md:space-y-10">
+          {/* Meow Miles Section */}
+          <div className="text-center bg-black/80 rounded-xl p-6 md:p-8 border border-purple-900/50 shadow-lg shadow-purple-500/20 hover:shadow-purple-500/40 transition-shadow duration-300">
+            <h2 className="text-2xl md:text-3xl font-semibold text-purple-300 mb-4">Your Meow Miles</h2>
+            <p className="text-5xl md:text-6xl font-extrabold bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-400 bg-clip-text text-transparent animate-bounce-slow">
               {meowMiles}
             </p>
+            <p className="text-sm md:text-base text-gray-400 mt-2">Complete quests to earn more!</p>
           </div>
 
+          {/* Quests Section */}
           <div>
-            <h3 className="text-lg md:text-xl font-semibold mb-4 text-purple-400">Quests</h3>
-            <div className="space-y-4">
+            <h3 className="text-xl md:text-2xl font-semibold mb-6 text-purple-300">Quests</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
               {quests.map((quest) => (
                 <div
                   key={quest.id}
-                  className="flex items-center justify-between py-2 border-b border-purple-900/50 last:border-b-0"
+                  className={`bg-black/90 rounded-xl p-5 border border-purple-900/50 shadow-md shadow-purple-500/20 hover:shadow-purple-500/40 transition-all duration-300 ${
+                    quest.completed ? 'opacity-80' : 'hover:-translate-y-1'
+                  }`}
                 >
-                  <div className="flex items-center space-x-3">
-                    <span className="text-2xl md:text-3xl">{quest.icon}</span>
-                    <div>
-                      <p className="text-base md:text-lg font-semibold text-purple-200">{quest.title}</p>
+                  <div className="flex items-center space-x-4">
+                    <Image
+                      src={quest.icon}
+                      alt={`${quest.title} Icon`}
+                      width={48}
+                      height={48}
+                      className="w-12 h-12 object-contain"
+                    />
+                    <div className="flex-1">
+                      <p className="text-lg md:text-xl font-semibold text-purple-200">{quest.title}</p>
                       <p className="text-sm text-gray-300">{quest.description}</p>
                     </div>
                   </div>
-                  <div className="flex items-center space-x-2 sm:space-x-3 shrink-0">
-                    <p className="text-cyan-400 font-medium text-sm md:text-base">{quest.meowMiles} Miles</p>
+                  <div className="mt-4 flex items-center justify-between">
+                    <p className="text-cyan-400 font-medium text-base">{quest.meowMiles} Miles</p>
                     <button
                       onClick={() => handleTaskStart(quest)}
                       disabled={quest.completed || processingQuestId === quest.id}
-                      className={`px-3 py-1 md:px-4 md:py-2 rounded-lg font-medium text-sm md:text-base transition-all duration-200 whitespace-nowrap ${
+                      className={`px-4 py-2 rounded-lg font-medium text-base transition-all duration-200 ${
                         quest.completed
                           ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
                           : processingQuestId === quest.id
-                          ? 'bg-yellow-600 text-white cursor-not-allowed'
-                          : 'bg-gradient-to-r from-purple-600 to-cyan-500 text-white hover:from-purple-500 hover:to-cyan-400'
+                          ? 'bg-yellow-600 text-white cursor-not-allowed animate-pulse'
+                          : 'bg-gradient-to-r from-purple-600 to-cyan-500 text-white hover:from-purple-500 hover:to-cyan-400 hover:scale-105'
                       }`}
                     >
                       {quest.completed
@@ -245,27 +259,29 @@ export default function QuestsPage() {
             </div>
           </div>
 
+          {/* Referral Section */}
           <div>
-            <h3 className="text-lg md:text-xl font-semibold mb-4 text-purple-400">Refer Friends</h3>
-            <div className="bg-black/90 rounded-xl p-6 border border-purple-900 shadow-md shadow-purple-500/20 hover:shadow-purple-500/40 transition-shadow duration-300">
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <h3 className="text-xl md:text-2xl font-semibold mb-6 text-purple-300">Refer Friends</h3>
+            <div className="bg-gradient-to-br from-black/90 to-purple-950/90 rounded-xl p-6 md:p-8 border border-purple-700 shadow-lg shadow-purple-500/20 hover:shadow-purple-500/40 transition-shadow duration-300">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
                 <div className="text-center sm:text-left">
-                  <p className="text-base md:text-lg font-semibold text-purple-200">Invite Friends</p>
-                  <p className="text-sm text-gray-300 mt-1">
-                    Earn <span className="text-cyan-400 font-bold">50 Meow Miles</span> per referral! ({referrals}{' '}
-                    referrals, <span className="text-cyan-400 font-bold">{referrals * 50} Miles</span> earned)
+                  <p className="text-lg md:text-xl font-semibold text-purple-200">Invite Your Friends</p>
+                  <p className="text-sm md:text-base text-gray-300 mt-2">
+                    Earn <span className="text-cyan-400 font-bold">500 Meow Miles</span> per referral! (
+                    {referrals} referrals,{' '}
+                    <span className="text-cyan-400 font-bold">{referrals * 500} Miles</span> earned)
                   </p>
                 </div>
-                <div className="flex items-center space-x-3 w-full sm:w-auto">
+                <div className="flex flex-col sm:flex-row items-center space-y-3 sm:space-y-0 sm:space-x-3 w-full sm:w-auto">
                   <input
                     type="text"
                     value={referralLink}
                     readOnly
-                    className="w-full sm:w-64 p-2 bg-gray-700/80 text-gray-200 rounded-lg border border-purple-900 focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                    className="w-full sm:w-64 p-3 bg-gray-800/80 text-gray-200 rounded-lg border border-purple-900 focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
                   />
                   <button
                     onClick={handleCopyReferralLink}
-                    className="flex items-center justify-center space-x-2 px-4 py-2 bg-gradient-to-r from-purple-700 to-cyan-500 text-white rounded-lg font-semibold hover:from-purple-600 hover:to-cyan-400 transition-all duration-300 whitespace-nowrap"
+                    className="flex items-center justify-center space-x-2 px-5 py-3 bg-gradient-to-r from-purple-700 to-cyan-500 text-white rounded-lg font-semibold hover:from-purple-600 hover:to-cyan-400 hover:scale-105 transition-all duration-300"
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"

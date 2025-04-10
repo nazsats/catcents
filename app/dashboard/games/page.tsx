@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { db } from '../../lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import Sidebar from '../../components/Sidebar';
@@ -24,7 +25,7 @@ export default function Games() {
         const data = userDoc.data();
         setGamesGmeow(Math.floor(data.gamesGmeow || 0));
         setGameScores({
-          minesweeper: data.minesweeperBestScore || 0,
+          catsweeper: data.minesweeperBestScore || 0,
         });
       }
     } catch (error) {
@@ -68,23 +69,23 @@ export default function Games() {
 
   const games = [
     {
-      id: 'minesweeper',
+      id: 'catsweeper',
       title: 'Cat Sweeper',
       description: 'Uncover safe cells and avoid bombs to earn Gmeow points!',
-      image: 'https://picsum.photos/300/200?random=1',
+      image: '/games/catsweeper.png',
     },
     {
-      id: 'future-game-1',
+      id: 'puzzle',
       title: 'Paw-some Puzzle (Coming Soon)',
       description: 'Solve cat-themed puzzles to win rewards.',
-      image: 'https://picsum.photos/300/200?random=2',
+      image: '/games/puzzle.png',
       comingSoon: true,
     },
     {
-      id: 'future-game-2',
+      id: 'race',
       title: 'Kitty Race (Coming Soon)',
       description: 'Race your NFT cats for Gmeow glory!',
-      image: 'https://picsum.photos/300/200?random=3',
+      image: '/games/race.png',
       comingSoon: true,
     },
   ];
@@ -94,6 +95,8 @@ export default function Games() {
       <Sidebar onDisconnect={disconnectWallet} />
       <main className="flex-1 p-4 md:p-8">
         <Toaster position="top-right" toastOptions={{ style: { background: '#1a1a1a', color: '#fff', border: '1px solid #9333ea' } }} />
+
+        {/* Header and Profile */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-8 gap-4">
           <h2 className="text-2xl md:text-3xl font-bold text-purple-300">Games</h2>
           <div className="ml-auto">
@@ -101,6 +104,39 @@ export default function Games() {
           </div>
         </div>
 
+        {/* Banner */}
+        <div className="w-full max-w-4xl mx-auto mb-6 md:mb-8">
+          <div className="relative w-full" style={{ paddingTop: '33.33%' /* 3:1 aspect ratio */ }}>
+            <Image
+              src="/games/gamebanner.png"
+              alt="Catcents Playground Banner"
+              layout="fill"
+              objectFit="cover"
+              className="rounded-xl border border-purple-900 shadow-lg shadow-purple-500/30"
+              priority
+            />
+          </div>
+        </div>
+
+        {/* Welcome Content (Smaller) */}
+        <div className="text-center mb-6 md:mb-8 px-4">
+          <h1 className="text-xl md:text-2xl font-extrabold bg-gradient-to-r from-purple-500 via-pink-500 to-cyan-400 bg-clip-text text-transparent mb-3">
+            Welcome to the Catcents Playground
+          </h1>
+          <p className="text-sm md:text-base text-gray-300 max-w-2xl mx-auto leading-relaxed">
+            <span className="text-cyan-400 font-semibold">This is your space</span> to{' '}
+            <span className="text-purple-400 font-semibold">play, earn, and have fun</span>. Every game you try helps you collect{' '}
+            <span className="text-pink-400 font-semibold">MeowMiles</span> and level up in the community.
+          </p>
+          <p className="text-sm md:text-base text-gray-300 max-w-2xl mx-auto mt-1 leading-relaxed">
+            No pressure, just <span className="text-cyan-400 font-semibold">good vibes</span>,{' '}
+            <span className="text-purple-400 font-semibold">cool games</span>, and a chance to win some{' '}
+            <span className="text-pink-400 font-semibold">real rewards</span> while you’re at it.
+          </p>
+          <p className="text-base md:text-lg font-bold text-cyan-400 mt-2">Let’s play and make it count!</p>
+        </div>
+
+        {/* Game Stats */}
         <div className="bg-black/90 rounded-xl p-6 border border-purple-900 shadow-md shadow-purple-500/20 mb-6 md:mb-8">
           <h3 className="text-lg md:text-xl font-semibold text-purple-400 mb-4">Your Game Stats</h3>
           <div className="flex flex-col sm:flex-row justify-between gap-4">
@@ -110,6 +146,7 @@ export default function Games() {
           </div>
         </div>
 
+        {/* Games Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
           {games.map((game) => (
             <div
@@ -117,11 +154,13 @@ export default function Games() {
               className="bg-black/90 rounded-xl border border-purple-900 shadow-md shadow-purple-500/20 hover:shadow-purple-500/40 transition-all duration-300 overflow-hidden flex flex-col"
             >
               <div className="w-full h-40 sm:h-48 relative">
-                <img
+                <Image
                   src={game.image}
                   alt={game.title}
-                  className="w-full h-full object-cover"
-                  onError={(e) => (e.currentTarget.src = 'https://picsum.photos/300/200?random=fallback')}
+                  width={300}
+                  height={300}
+                  className="w-full h-full object-cover rounded-t-xl"
+                  onError={(e) => (e.currentTarget.src = 'https://picsum.photos/300/300?random=fallback')}
                 />
                 {game.comingSoon && (
                   <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
