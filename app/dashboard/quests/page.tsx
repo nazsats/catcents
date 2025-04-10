@@ -10,6 +10,9 @@ import { useWeb3Modal } from '../../lib/Web3ModalContext';
 import toast, { Toaster } from 'react-hot-toast';
 import Image from 'next/image';
 
+// Replace this with your actual deployed domain
+const DEPLOYED_DOMAIN = 'https://yourdomain.com'; // Update this to your live domain, e.g., 'https://catcents.io'
+
 const INITIAL_QUESTS = [
   { id: 'connect_twitter', title: 'Connect Twitter', description: 'Link your Twitter account', meowMiles: 30, completed: false, icon: '/quest/link.png' },
   { id: 'connect_discord', title: 'Connect Discord', description: 'Link your Discord account', meowMiles: 30, completed: false, icon: '/quest/discord.png' },
@@ -48,9 +51,17 @@ export default function QuestsPage() {
         );
         setMeowMiles(data.meowMiles || 0);
         setReferrals(data.referrals?.length || 0);
-        setReferralLink(data.referralLink || `${window.location.origin}/?ref=${address}`);
+
+        // Always regenerate referral link with the deployed domain
+        const newReferralLink = `${DEPLOYED_DOMAIN}/?ref=${address}`;
+        setReferralLink(newReferralLink);
+
+        // Update Firebase if the stored referral link is outdated (e.g., contains localhost)
+        if (data.referralLink && data.referralLink !== newReferralLink) {
+          await setDoc(userRef, { referralLink: newReferralLink }, { merge: true });
+        }
       } else {
-        const newReferralLink = `${window.location.origin}/?ref=${address}`;
+        const newReferralLink = `${DEPLOYED_DOMAIN}/?ref=${address}`;
         await setDoc(userRef, {
           walletAddress: address,
           meowMiles: 0,
