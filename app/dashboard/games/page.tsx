@@ -86,7 +86,11 @@ export default function Games() {
       <main className="flex-1 p-8">
         <div className="flex justify-between items-center mb-8">
           <h2 className="text-xl font-semibold text-purple-300">Games</h2>
-          <Profile account={account} onCopyAddress={handleCopyAddress} />
+          <Profile
+            account={account}
+            onCopyAddress={handleCopyAddress}
+            onDisconnect={disconnectWallet} // Added missing prop
+          />
         </div>
 
         <div className="bg-black/80 rounded-lg p-6 border border-purple-900 mb-8">

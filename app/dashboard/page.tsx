@@ -5,6 +5,7 @@ import { db } from '../lib/firebase';
 import { doc, getDoc, setDoc, increment } from 'firebase/firestore';
 import Sidebar from '../components/Sidebar';
 import Profile from '../components/Profile';
+import Badges from '../components/Badges';
 import { useWeb3Modal } from '../lib/Web3ModalContext';
 import toast, { Toaster } from 'react-hot-toast';
 import { ethers } from 'ethers';
@@ -17,27 +18,33 @@ export default function DashboardPage() {
   const [countdown, setCountdown] = useState<string>('24:00:00');
   const [checkingIn, setCheckingIn] = useState(false);
   const router = useRouter();
-  const [hasRedirected, setHasRedirected] = useState(false); // Prevent multiple redirects
 
   const fetchUserData = async (address: string) => {
+    console.log('fetchUserData called with address:', address);
     try {
       const userRef = doc(db, 'users', address);
       const userSnap = await getDoc(userRef);
+      console.log('Firebase snapshot exists:', userSnap.exists());
       if (userSnap.exists()) {
         const data = userSnap.data();
+        console.log('Firebase data:', data);
         const quests = Math.floor(data.meowMiles || 0);
         const proposals = Math.floor(data.proposalsGmeow || 0);
         const games = Math.floor(data.gamesGmeow || 0);
         const referrals = Math.floor(data.referrals?.length || 0);
-        setMeowMiles({
+        const newMeowMiles = {
           quests,
           proposals,
           games,
           referrals,
           total: quests + proposals + games + referrals,
-        });
+        };
+        console.log('Setting meowMiles:', newMeowMiles);
+        setMeowMiles(newMeowMiles);
         setLastCheckIn(data.lastCheckIn || null);
         if (data.lastCheckIn) startCountdown(data.lastCheckIn);
+      } else {
+        console.log('No data found in Firebase for address:', address);
       }
     } catch (error) {
       console.error('Failed to fetch user data:', error);
@@ -46,16 +53,17 @@ export default function DashboardPage() {
   };
 
   const fetchMonBalance = async (address: string) => {
+    console.log('fetchMonBalance called with address:', address);
     try {
       if (!provider) {
-        setMonBalance('N/A');
-        return;
+        throw new Error('Provider not available');
       }
       const balance = await provider.getBalance(address);
-      setMonBalance(ethers.formatEther(balance).slice(0, 6));
+      setMonBalance(ethers.formatEther(balance).slice(0, 6)); // Fixed: ethers.formatEther
     } catch (error) {
       console.error('Failed to fetch MON balance:', error);
-      setMonBalance('Error');
+      setMonBalance('N/A');
+      toast.error('Unable to fetch MON balance');
     }
   };
 
@@ -70,10 +78,10 @@ export default function DashboardPage() {
       const signer = await provider.getSigner();
       const tx = await signer.sendTransaction({
         to: '0xfF8b7625894441C26fEd460dD21360500BF4E767',
-        value: ethers.parseEther('0'),
+        value: ethers.parseEther('0'), // Fixed: ethers.parseEther
       });
 
-      const pendingToast = toast.loading('Processing check-in transaction...');
+      const pendingToast = toast.loading('Processing check-in...');
       const receipt = await tx.wait();
       if (!receipt) throw new Error('Transaction receipt not received');
       const txHash = receipt.hash;
@@ -138,76 +146,136 @@ export default function DashboardPage() {
     }
   };
 
-  useEffect(() => {
-    console.log('Dashboard - useEffect - Account:', account, 'Loading:', loading, 'HasRedirected:', hasRedirected);
-    if (loading) return;
-    if (!account && !hasRedirected) {
-      console.log('Dashboard - Redirecting to /');
-      setHasRedirected(true);
-      router.push('/');
-    } else if (account) {
-      console.log('Dashboard - Fetching data for:', account);
-      fetchUserData(account);
-      fetchMonBalance(account);
+  const handleCopyReferralLink = () => {
+    if (account) {
+      const referralLink = `${window.location.origin}/?ref=${account}`;
+      navigator.clipboard.writeText(referralLink);
+      toast.success('Referral link copied!');
     }
-  }, [account, loading, router, hasRedirected]);
+  };
 
-  if (loading) return <div className="flex min-h-screen items-center justify-center bg-black text-white">Loading...</div>;
+  useEffect(() => {
+    console.log('Dashboard - useEffect - Account:', account, 'Provider:', provider, 'Loading:', loading);
+    if (loading) return;
+    if (!account) {
+      console.log('No account, redirecting to /');
+      router.replace('/');
+      return;
+    }
+    console.log('Fetching data for account:', account);
+    fetchUserData(account);
+    fetchMonBalance(account);
+  }, [account, provider, loading, router]);
+
+  if (loading) return <div className="flex min-h-screen items-center justify-center bg-black text-white animate-pulse">Loading...</div>;
   if (!account) return null;
 
   return (
     <div className="flex min-h-screen bg-gradient-to-br from-black to-purple-950 text-white">
       <Sidebar onDisconnect={disconnectWallet} />
-      <main className="flex-1 p-8">
+      <main className="flex-1 p-4 md:p-8 overflow-auto">
         <Toaster position="top-right" />
-        <div className="flex justify-between items-center mb-8">
-          <h2 className="text-xl font-semibold text-purple-300">Dashboard</h2>
-          <Profile account={account} onCopyAddress={handleCopyAddress} />
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-8 gap-4">
+          <h2 className="text-xl md:text-2xl font-semibold text-purple-300">Dashboard</h2>
+          <div className="ml-auto">
+            <Profile account={account} onCopyAddress={handleCopyAddress} onDisconnect={disconnectWallet} />
+          </div>
         </div>
-        <div className="flex space-x-6">
-          <div className="flex-1 space-y-6">
-            <div className="bg-black/80 rounded-lg p-6 text-center border border-purple-900 shadow-lg shadow-purple-500/20 animate-glow">
-              <h3 className="text-2xl font-bold text-purple-400">Total Meow Miles</h3>
-              <p className="text-5xl font-extrabold mt-2 bg-gradient-to-r from-purple-500 via-pink-500 to-cyan-400 bg-clip-text text-transparent">
-                {meowMiles.total}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-black/90 rounded-xl p-6 border border-purple-900 shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 transition-shadow duration-300 md:order-3">
+            <h4 className="text-lg font-semibold text-purple-400 mb-4">Daily Check-In</h4>
+            <div className="space-y-4">
+              <p className="text-center text-gray-300 text-sm md:text-base">
+                Next check-in: <span className="font-mono text-cyan-400">{countdown}</span>
               </p>
+              <button
+                onClick={handleDailyCheckIn}
+                className="w-full bg-gradient-to-r from-purple-700 to-cyan-500 text-white py-3 rounded-lg font-semibold hover:from-purple-600 hover:to-cyan-400 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
+                disabled={checkingIn || (lastCheckIn !== null && Date.now() - lastCheckIn < 24 * 60 * 60 * 1000)}
+              >
+                {checkingIn ? (
+                  <span className="flex items-center justify-center">
+                    <svg className="animate-spin h-5 w-5 mr-2" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                    </svg>
+                    Checking In...
+                  </span>
+                ) : (
+                  'Check In'
+                )}
+              </button>
             </div>
-            <div className="bg-black/80 rounded-lg p-6 border border-purple-900 shadow-lg shadow-purple-500/20">
-              <h4 className="text-lg font-semibold mb-4 text-purple-400">Score Breakdown</h4>
-              <div className="grid grid-cols-3 gap-4">
-                <div className="text-center">
-                  <p className="text-xl font-bold text-purple-400">{meowMiles.quests}</p>
-                  <p className="text-gray-300">Quest Meow Miles</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-xl font-bold text-purple-400">{meowMiles.proposals}</p>
-                  <p className="text-gray-300">Proposal Meow Miles</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-xl font-bold text-purple-400">{meowMiles.games}</p>
-                  <p className="text-gray-300">Game Meow Miles</p>
-                </div>
+          </div>
+
+          <div className="bg-black/90 rounded-xl p-6 text-center border border-purple-900 shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 transition-shadow duration-300 md:order-1 md:col-span-2">
+            <h3 className="text-xl md:text-2xl font-bold text-purple-400 mb-2">Total Meow Miles</h3>
+            <p className="text-4xl md:text-5xl font-extrabold bg-gradient-to-r from-purple-500 via-pink-500 to-cyan-400 bg-clip-text text-transparent animate-pulse-slow">
+              {meowMiles.total}
+            </p>
+          </div>
+
+          <div className="bg-black/90 rounded-xl p-6 border border-purple-900 shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 transition-shadow duration-300 md:order-2 md:col-span-2">
+            <h4 className="text-lg md:text-xl font-semibold text-purple-400 mb-4">Score Breakdown</h4>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="text-center p-4 bg-purple-900/20 rounded-lg hover:bg-purple-900/30 transition-colors">
+                <p className="text-xl md:text-2xl font-bold bg-gradient-to-r from-purple-500 to-cyan-400 bg-clip-text text-transparent">
+                  {meowMiles.quests}
+                </p>
+                <p className="text-sm text-gray-300">Quest Miles</p>
+              </div>
+              <div className="text-center p-4 bg-purple-900/20 rounded-lg hover:bg-purple-900/30 transition-colors">
+                <p className="text-xl md:text-2xl font-bold bg-gradient-to-r from-purple-500 to-cyan-400 bg-clip-text text-transparent">
+                  {meowMiles.proposals}
+                </p>
+                <p className="text-sm text-gray-300">Proposal Miles</p>
+              </div>
+              <div className="text-center p-4 bg-purple-900/20 rounded-lg hover:bg-purple-900/30 transition-colors">
+                <p className="text-xl md:text-2xl font-bold bg-gradient-to-r from-purple-500 to-cyan-400 bg-clip-text text-transparent">
+                  {meowMiles.games}
+                </p>
+                <p className="text-sm text-gray-300">Game Miles</p>
+              </div>
+              <div className="text-center p-4 bg-purple-900/20 rounded-lg hover:bg-purple-900/30 transition-colors">
+                <p className="text-xl md:text-2xl font-bold bg-gradient-to-r from-purple-500 to-cyan-400 bg-clip-text text-transparent">
+                  {meowMiles.referrals}
+                </p>
+                <p className="text-sm text-gray-300">Referral Miles</p>
               </div>
             </div>
           </div>
-          <div className="w-80 space-y-6">
-            <div className="bg-black/80 rounded-lg p-6 border border-purple-900 shadow-lg shadow-purple-500/20">
-              <h4 className="text-lg font-semibold mb-2 text-purple-400">Assets</h4>
-              <p className="text-2xl font-bold text-cyan-400">Available MON: {monBalance}</p>
-            </div>
-            <div className="bg-black/80 rounded-lg p-6 border border-purple-900 shadow-lg shadow-purple-500/20">
-              <h4 className="text-lg font-semibold mb-4 text-purple-400">Daily Check-In</h4>
-              <div className="space-y-4">
-                <p className="text-center text-gray-300">Next check-in in: {countdown}</p>
-                <button
-                  onClick={handleDailyCheckIn}
-                  className="w-full bg-gradient-to-r from-purple-700 to-purple-500 text-white py-3 rounded-lg hover:from-purple-600 hover:to-purple-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={checkingIn || (lastCheckIn !== null && Date.now() - lastCheckIn < 24 * 60 * 60 * 1000)}
-                >
-                  {checkingIn ? 'Checking In...' : 'Check In'}
-                </button>
-              </div>
-            </div>
+
+          <div className="bg-black/90 rounded-xl p-6 border border-purple-900 shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 transition-shadow duration-300 md:order-4">
+            <h4 className="text-lg font-semibold text-purple-400 mb-4">Invite Friends</h4>
+            <button
+              onClick={handleCopyReferralLink}
+              className="w-full flex items-center justify-center space-x-2 bg-gradient-to-r from-purple-700 to-cyan-500 text-white py-3 rounded-lg font-semibold hover:from-purple-600 hover:to-cyan-400 transition-all duration-300"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                />
+              </svg>
+              <span>Copy Referral Link</span>
+            </button>
+          </div>
+
+          <div className="md:col-span-2 md:order-5">
+            <Badges totalMeowMiles={meowMiles.total} />
+          </div>
+
+          <div className="hidden md:block bg-black/90 rounded-xl p-6 border border-purple-900 shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 transition-shadow duration-300 md:order-6">
+            <h4 className="text-lg font-semibold text-purple-400 mb-2">Assets</h4>
+            <p className="text-xl md:text-2xl font-bold text-cyan-400">MON: {monBalance}</p>
           </div>
         </div>
       </main>

@@ -124,6 +124,14 @@ export default function QuestsPage() {
     setTimeout(() => setMessage(null), 2000);
   };
 
+  const handleCopyAddress = () => {
+    if (account) {
+      navigator.clipboard.writeText(account);
+      setMessage('Address copied!');
+      setTimeout(() => setMessage(null), 2000);
+    }
+  };
+
   useEffect(() => {
     console.log('Quests useEffect - Account:', account, 'Loading:', loading, 'HasRedirected:', hasRedirected);
     if (loading) return;
@@ -171,7 +179,11 @@ export default function QuestsPage() {
       <main className="flex-1 p-8">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-purple-300">Catcents Quests</h1>
-          <Profile account={account} onCopyAddress={() => navigator.clipboard.writeText(account)} />
+          <Profile
+            account={account}
+            onCopyAddress={handleCopyAddress}
+            onDisconnect={disconnectWallet} // Added missing prop
+          />
         </div>
 
         {message && (

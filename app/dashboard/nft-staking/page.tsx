@@ -37,7 +37,11 @@ export default function NFTStaking() {
       <main className="flex-1 p-8">
         <div className="flex justify-between items-center mb-8">
           <h2 className="text-xl font-semibold text-purple-300">NFT Staking</h2>
-          <Profile account={account} onCopyAddress={handleCopyAddress} />
+          <Profile
+            account={account}
+            onCopyAddress={handleCopyAddress}
+            onDisconnect={disconnectWallet} // Added missing prop
+          />
         </div>
         <div className="bg-black/80 rounded-lg p-6 border border-purple-900">
           <h3 className="text-lg font-semibold text-purple-400">Stake Your NFTs</h3>

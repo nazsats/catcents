@@ -214,6 +214,13 @@ export default function Proposals() {
     setProposals((prev) => prev.map((prop) => (prop.id === propId ? { ...prop, isExpanded: !prop.isExpanded } : prop)));
   };
 
+  const handleCopyAddress = () => {
+    if (account) {
+      navigator.clipboard.writeText(account);
+      toast.success('Address copied!');
+    }
+  };
+
   const sortProposals = useMemo(() => {
     let sorted = [...proposals];
     switch (category) {
@@ -254,7 +261,11 @@ export default function Proposals() {
         <Toaster position="top-right" toastOptions={{ style: { background: '#1a1a1a', color: '#fff', border: '1px solid #9333ea' } }} />
         <div className="flex justify-between items-center mb-8">
           <h2 className="text-xl font-semibold text-purple-300">Proposals</h2>
-          <Profile account={account} onCopyAddress={() => navigator.clipboard.writeText(account)} />
+          <Profile
+            account={account}
+            onCopyAddress={handleCopyAddress} // Updated with function
+            onDisconnect={disconnectWallet} // Added missing prop
+          />
         </div>
 
         {error && <div className="text-red-400 mb-4">{error}</div>}
@@ -321,7 +332,7 @@ export default function Proposals() {
                 <div className="p-4 mt-auto border-t border-purple-900/50">
                   <div className="space-y-2">
                     <div>
-                      <div className="flex justify-between text-xs text-gray-300 mb-1">
+                     辖        <div className="flex justify-between text-xs text-gray-300 mb-1">
                         <span>Yes: {proposal.yesVotes}</span>
                         <span>{yesPercentage.toFixed(1)}%</span>
                       </div>

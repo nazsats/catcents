@@ -249,6 +249,13 @@ export default function Minesweeper() {
     }
   };
 
+  const handleCopyAddress = () => {
+    if (account) {
+      navigator.clipboard.writeText(account);
+      toast.success('Address copied!');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-black to-purple-950 text-white">
@@ -268,7 +275,11 @@ export default function Minesweeper() {
         <Toaster position="top-right" toastOptions={{ style: { background: '#1a1a1a', color: '#fff', border: '1px solid #9333ea' } }} />
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-purple-300">Minesweeper</h1>
-          <Profile account={account} onCopyAddress={() => navigator.clipboard.writeText(account)} />
+          <Profile
+            account={account}
+            onCopyAddress={handleCopyAddress}
+            onDisconnect={disconnectWallet} // Added missing prop
+          />
         </div>
 
         <div className="flex justify-between mb-6">
