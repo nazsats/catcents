@@ -74,11 +74,7 @@ export default function DashboardPage() {
 
       const pendingToast = toast.loading('Processing check-in transaction...');
       const receipt = await tx.wait();
-
-      // Check if receipt is null before accessing hash
-      if (!receipt) {
-        throw new Error('Transaction receipt not received');
-      }
+      if (!receipt) throw new Error('Transaction receipt not received');
       const txHash = receipt.hash;
 
       const userRef = doc(db, 'users', account);
@@ -92,7 +88,12 @@ export default function DashboardPage() {
       toast.success(
         <div>
           Check-in completed!{' '}
-          <a href={`https://testnet.monadscan.com/tx/${txHash}`} target="_blank" rel="noopener noreferrer" className="underline text-cyan-400 hover:text-cyan-300">
+          <a
+            href={`https://testnet.monadscan.com/tx/${txHash}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline text-cyan-400 hover:text-cyan-300"
+          >
             View on MonadScan
           </a>
         </div>,
@@ -119,7 +120,9 @@ export default function DashboardPage() {
       const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
       const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
       setCountdown(
-        `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+        `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds
+          .toString()
+          .padStart(2, '0')}`
       );
     };
     updateTimer();

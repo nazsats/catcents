@@ -44,7 +44,7 @@ export default function LandingPage() {
           <p className="text-xl mb-8">Join our Web3 community and start earning points!</p>
           {refCode && <p className="text-sm mb-4">Referred by: {refCode.slice(0, 6)}...</p>}
           <button
-            onClick={() => connectWallet(refCode)}
+            onClick={() => connectWallet(refCode ?? undefined)} // Convert null to undefined
             disabled={loading}
             className="bg-purple-600 px-8 py-4 rounded-lg text-lg font-semibold hover:bg-purple-700 transition-colors disabled:opacity-50"
           >

@@ -1,9 +1,9 @@
 'use client';
 import { createWeb3Modal, defaultConfig } from '@web3modal/ethers';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { BrowserProvider, ethers } from 'ethers';
 import { db } from './firebase';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 // Extend Eip1193Provider to include event listener methods
 interface ExtendedEip1193Provider extends ethers.Eip1193Provider {
@@ -45,120 +45,137 @@ const modal = createWeb3Modal({
 });
 
 export function useWeb3Modal() {
-  const [account, setAccount] = useState<string | null>(() => {
-    const storedAccount = localStorage.getItem('account');
-    return storedAccount || null;
-  });
+  const [account, setAccount] = useState<string | null>(null);
   const [provider, setProvider] = useState<BrowserProvider | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const connectWallet = async (refCode?: string): Promise<void> => {
+  // Fetch account data from Firebase
+  const fetchAccountFromFirebase = useCallback(async (address: string) => {
+    const userRef = doc(db, 'users', address.toLowerCase());
+    const userSnap = await getDoc(userRef);
+    if (userSnap.exists()) {
+      console.log('Account fetched from Firebase:', address);
+      return address;
+    }
+    return null;
+  }, []);
+
+  // Initialize connection or load from Firebase
+  const initializeConnection = useCallback(async () => {
+    if (typeof window === 'undefined') return; // Skip on server
+
+    setLoading(true);
     try {
-      console.log('connectWallet started');
-      setLoading(true);
-
-      await modal.open();
-
-      const connectionPromise = new Promise<void>((resolve, reject) => {
-        const unsubscribe = modal.subscribeProvider(async (state) => {
-          console.log('Provider state:', state);
-          if (state.provider && state.isConnected) {
-            const web3Provider = new ethers.BrowserProvider(state.provider);
-            const signer = await web3Provider.getSigner();
-            const address = (await signer.getAddress()).toLowerCase();
-
-            const userRef = doc(db, 'users', address);
-            const userSnap = await getDoc(userRef);
-            if (!userSnap.exists()) {
-              await setDoc(userRef, {
-                walletAddress: address,
-                meowMiles: 0,
-                proposalsGmeow: 0,
-                gamesGmeow: 0,
-                createdAt: new Date().toISOString(),
-                lastCheckIn: null,
-                referredBy: refCode || null,
-                referrals: [],
-              });
-              console.log('New user saved to Firebase:', address);
-            }
-
-            document.cookie = `account=${address}; path=/; max-age=86400`;
-            localStorage.setItem('account', address);
+      const cachedProvider = modal.getWalletProvider() as ExtendedEip1193Provider | undefined;
+      if (cachedProvider) {
+        const web3Provider = new ethers.BrowserProvider(cachedProvider);
+        const accounts = await web3Provider.listAccounts();
+        if (accounts.length > 0) {
+          const address = accounts[0].address.toLowerCase();
+          const firebaseAccount = await fetchAccountFromFirebase(address);
+          if (firebaseAccount) {
             setProvider(web3Provider);
-            setAccount(address);
-            console.log('Wallet connected, account set:', address);
-
-            modal.close();
-            if (unsubscribe) unsubscribe();
-            resolve();
+            setAccount(firebaseAccount);
+            document.cookie = `account=${firebaseAccount}; path=/; max-age=86400`;
+            if (window.localStorage) localStorage.setItem('account', firebaseAccount);
+            console.log('Initialized with Firebase account:', firebaseAccount);
           }
-        }) as (() => void) | undefined;
-
-        setTimeout(() => {
-          if (unsubscribe) unsubscribe();
-          reject(new Error('Connection timed out'));
-        }, 30000); // 30 seconds timeout
-      });
-
-      await connectionPromise;
+        }
+      }
     } catch (error) {
-      console.error('Wallet connection failed:', error);
-      setAccount(null);
-      setProvider(null);
-      localStorage.removeItem('account');
+      console.error('Failed to initialize wallet:', error);
     } finally {
       setLoading(false);
-      console.log('connectWallet finished, account:', account, 'loading:', loading);
     }
-  };
+  }, [fetchAccountFromFirebase]);
 
-  const disconnectWallet = (): void => {
+  const connectWallet = useCallback(
+    async (refCode?: string): Promise<void> => {
+      try {
+        console.log('connectWallet started');
+        setLoading(true);
+
+        await modal.open();
+
+        const connectionPromise = new Promise<void>((resolve, reject) => {
+          const unsubscribe = modal.subscribeProvider(async (state) => {
+            console.log('Provider state:', state);
+            if (state.provider && state.isConnected) {
+              const web3Provider = new ethers.BrowserProvider(state.provider);
+              const signer = await web3Provider.getSigner();
+              const address = (await signer.getAddress()).toLowerCase();
+
+              const userRef = doc(db, 'users', address);
+              const userSnap = await getDoc(userRef);
+              if (!userSnap.exists()) {
+                await setDoc(userRef, {
+                  walletAddress: address,
+                  meowMiles: 0,
+                  proposalsGmeow: 0,
+                  gamesGmeow: 0,
+                  createdAt: new Date().toISOString(),
+                  lastCheckIn: null,
+                  referredBy: refCode || null,
+                  referrals: [],
+                });
+                console.log('New user saved to Firebase:', address);
+              }
+
+              setProvider(web3Provider);
+              setAccount(address);
+              document.cookie = `account=${address}; path=/; max-age=86400`;
+              if (typeof window !== 'undefined' && window.localStorage) {
+                localStorage.setItem('account', address);
+              }
+              console.log('Wallet connected, account set:', address);
+
+              modal.close();
+              if (unsubscribe) unsubscribe();
+              resolve();
+            }
+          }) as (() => void) | undefined;
+
+          setTimeout(() => {
+            if (unsubscribe) unsubscribe();
+            reject(new Error('Connection timed out'));
+          }, 30000);
+        });
+
+        await connectionPromise;
+      } catch (error) {
+        console.error('Wallet connection failed:', error);
+        setAccount(null);
+        setProvider(null);
+        if (typeof window !== 'undefined' && window.localStorage) {
+          localStorage.removeItem('account');
+        }
+      } finally {
+        setLoading(false);
+      }
+    },
+    []
+  );
+
+  const disconnectWallet = useCallback((): void => {
     setAccount(null);
     setProvider(null);
     document.cookie = 'account=; path=/; max-age=0';
-    localStorage.removeItem('account');
+    if (typeof window !== 'undefined' && window.localStorage) {
+      localStorage.removeItem('account');
+    }
     console.log('Wallet disconnected');
     modal.close();
-  };
+  }, []);
 
   useEffect(() => {
-    const initializeConnection = async (): Promise<void> => {
-      try {
-        console.log('Initializing connection');
-        const cachedProvider = modal.getWalletProvider() as ExtendedEip1193Provider | undefined;
-        if (cachedProvider) {
-          const web3Provider = new ethers.BrowserProvider(cachedProvider);
-          const accounts = await web3Provider.listAccounts();
-          if (accounts.length > 0) {
-            const address = accounts[0].address.toLowerCase();
-            setProvider(web3Provider);
-            setAccount(address);
-            document.cookie = `account=${address}; path=/; max-age=86400`;
-            localStorage.setItem('account', address);
-            console.log('Found existing connected account:', address);
-          }
-        }
-      } catch (error) {
-        console.error('Failed to initialize wallet:', error);
-      } finally {
-        setLoading(false);
-        console.log('Initialization complete, account:', account);
-      }
-    };
-
     initializeConnection();
 
     const unsubscribe = modal.subscribeProvider((state) => {
       if (state.provider && state.isConnected) {
         const web3Provider = new ethers.BrowserProvider(state.provider);
         setProvider(web3Provider);
-      }
-      if (!state.isConnected) {
-        setAccount(null);
-        setProvider(null);
-        document.cookie = 'account=; path=/; max-age=0';
-        localStorage.removeItem('account');
+      } else if (!state.isConnected && account) {
+        disconnectWallet();
       }
     }) as (() => void) | undefined;
 
@@ -166,9 +183,15 @@ export function useWeb3Modal() {
     const handleAccountsChanged = (accounts: string[]): void => {
       if (accounts.length > 0) {
         const address = accounts[0].toLowerCase();
-        setAccount(address);
-        document.cookie = `account=${address}; path=/; max-age=86400`;
-        localStorage.setItem('account', address);
+        fetchAccountFromFirebase(address).then((firebaseAccount) => {
+          if (firebaseAccount) {
+            setAccount(firebaseAccount);
+            document.cookie = `account=${firebaseAccount}; path=/; max-age=86400`;
+            if (typeof window !== 'undefined' && window.localStorage) {
+              localStorage.setItem('account', firebaseAccount);
+            }
+          }
+        });
       } else {
         disconnectWallet();
       }
@@ -184,7 +207,7 @@ export function useWeb3Modal() {
         cachedProvider.removeListener('accountsChanged', handleAccountsChanged);
       }
     };
-  }, []);
+  }, [initializeConnection, disconnectWallet, fetchAccountFromFirebase]);
 
   return { account, provider, connectWallet, disconnectWallet, loading };
 }
