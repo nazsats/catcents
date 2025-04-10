@@ -6,7 +6,7 @@ import { doc, getDoc, setDoc, collection, getDocs, query, orderBy, Timestamp, in
 import { ethers } from 'ethers';
 import Sidebar from '../../components/Sidebar';
 import Profile from '../../components/Profile';
-import { useWeb3Modal } from '../../lib/useWeb3Modal';
+import { useWeb3Modal } from '../../lib/Web3ModalContext';
 import toast, { Toaster } from 'react-hot-toast';
 
 const DEMO_PROPOSALS = [
@@ -37,6 +37,7 @@ export default function Proposals() {
   const cardsPerPage = 20;
   const router = useRouter();
   const contentPreviewLength = 100;
+  const [hasRedirected, setHasRedirected] = useState(false);
 
   const fetchProposalsAndUserData = async (userAddress: string) => {
     setIsLoading(true);
@@ -108,14 +109,18 @@ export default function Proposals() {
   };
 
   useEffect(() => {
-    console.log('Proposals useEffect - Account:', account, 'Loading:', loading);
+    console.log('Proposals useEffect - Account:', account, 'Loading:', loading, 'HasRedirected:', hasRedirected);
     if (loading) return;
+    if (!account && !hasRedirected) {
+      console.log('Proposals - Redirecting to /');
+      setHasRedirected(true);
+      router.push('/');
+      return;
+    }
     if (account) {
       fetchProposalsAndUserData(account);
-    } else {
-      router.push('/');
     }
-  }, [account, loading, router]);
+  }, [account, loading, router, hasRedirected]);
 
   const handleLike = async (propId: string) => {
     if (!account) return;

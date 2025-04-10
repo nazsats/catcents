@@ -6,13 +6,14 @@ import { db } from '../../lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import Sidebar from '../../components/Sidebar';
 import Profile from '../../components/Profile';
-import { useWeb3Modal } from '../../lib/useWeb3Modal';
+import { useWeb3Modal } from '../../lib/Web3ModalContext';
 
 export default function Games() {
   const { account, disconnectWallet, loading } = useWeb3Modal();
   const [gamesGmeow, setGamesGmeow] = useState(0);
   const [gameScores, setGameScores] = useState<{ [key: string]: number }>({});
   const router = useRouter();
+  const [hasRedirected, setHasRedirected] = useState(false);
 
   const fetchGameScores = async (userAddress: string) => {
     try {
@@ -31,14 +32,18 @@ export default function Games() {
   };
 
   useEffect(() => {
-    console.log('Games useEffect - Account:', account, 'Loading:', loading);
+    console.log('Games useEffect - Account:', account, 'Loading:', loading, 'HasRedirected:', hasRedirected);
     if (loading) return;
-    if (!account) {
+    if (!account && !hasRedirected) {
+      console.log('Games - Redirecting to /');
+      setHasRedirected(true);
       router.push('/');
       return;
     }
-    fetchGameScores(account);
-  }, [account, loading, router]);
+    if (account) {
+      fetchGameScores(account);
+    }
+  }, [account, loading, router, hasRedirected]);
 
   const handleCopyAddress = () => {
     if (account) {

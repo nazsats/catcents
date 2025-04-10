@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { doc, getDoc, setDoc, runTransaction, increment } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
-import { useWeb3Modal } from '../../../lib/useWeb3Modal';
+import { useWeb3Modal } from '../../../lib/Web3ModalContext';
 import { ethers } from 'ethers';
 import Sidebar from '../../../components/Sidebar';
 import Profile from '../../../components/Profile';
@@ -34,6 +34,7 @@ export default function Minesweeper() {
   const [isCashout, setIsCashout] = useState(false);
   const [isBetting, setIsBetting] = useState(false);
   const router = useRouter();
+  const [hasRedirected, setHasRedirected] = useState(false);
 
   const initializeGrid = () => {
     const newGrid = Array.from({ length: GRID_SIZE }, () =>
@@ -88,15 +89,19 @@ export default function Minesweeper() {
   };
 
   useEffect(() => {
-    console.log('Minesweeper useEffect - Account:', account, 'Loading:', loading);
+    console.log('Minesweeper useEffect - Account:', account, 'Loading:', loading, 'HasRedirected:', hasRedirected);
     if (loading) return;
-    if (!account) {
+    if (!account && !hasRedirected) {
+      console.log('Minesweeper - Redirecting to /');
+      setHasRedirected(true);
       router.push('/');
-    } else {
+      return;
+    }
+    if (account) {
       fetchUserData();
       initializeGrid();
     }
-  }, [account, loading, router]);
+  }, [account, loading, router, hasRedirected]);
 
   const placeBet = async () => {
     if (!provider) {

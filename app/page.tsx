@@ -1,26 +1,42 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useWeb3Modal } from './lib/useWeb3Modal';
+import { useWeb3Modal } from './lib/Web3ModalContext';
 
 export default function LandingPage() {
   const { account, connectWallet, loading } = useWeb3Modal();
   const [refCode, setRefCode] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null); // Add error state
   const router = useRouter();
+  const [hasRedirected, setHasRedirected] = useState(false);
 
   useEffect(() => {
-    const queryParams = new URLSearchParams(window.location.search);
-    const ref = queryParams.get('ref');
-    setRefCode(ref);
+    if (typeof window !== 'undefined') {
+      const queryParams = new URLSearchParams(window.location.search);
+      const ref = queryParams.get('ref');
+      console.log('Landing - Setting refCode:', ref);
+      setRefCode(ref);
+    }
   }, []);
 
   useEffect(() => {
-    console.log('Landing page useEffect - Account:', account, 'Loading:', loading);
-    if (account && !loading) {
-      console.log('Redirecting to /dashboard');
+    console.log('Landing - useEffect - Account:', account, 'Loading:', loading, 'HasRedirected:', hasRedirected);
+    if (account && !loading && !hasRedirected) {
+      console.log('Landing - Redirecting to /dashboard');
+      setHasRedirected(true);
       router.push('/dashboard');
     }
-  }, [account, loading, router]);
+  }, [account, loading, router, hasRedirected]);
+
+  const handleConnectWallet = async () => {
+    try {
+      setError(null); // Clear previous errors
+      await connectWallet(refCode ?? undefined);
+    } catch (err) {
+      console.error('Connect wallet error:', err);
+      setError('Failed to connect wallet: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    }
+  };
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-900 to-purple-900 text-white">
@@ -43,8 +59,9 @@ export default function LandingPage() {
           </h1>
           <p className="text-xl mb-8">Join our Web3 community and start earning points!</p>
           {refCode && <p className="text-sm mb-4">Referred by: {refCode.slice(0, 6)}...</p>}
+          {error && <p className="text-red-500 mb-4">{error}</p>}
           <button
-            onClick={() => connectWallet(refCode ?? undefined)} // Convert null to undefined
+            onClick={handleConnectWallet}
             disabled={loading}
             className="bg-purple-600 px-8 py-4 rounded-lg text-lg font-semibold hover:bg-purple-700 transition-colors disabled:opacity-50"
           >

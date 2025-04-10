@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { ReactNode } from 'react';
 import './globals.css';
+import { Web3ModalProvider } from '../app/lib/Web3ModalContext';
 
 export const metadata: Metadata = {
   title: {
@@ -58,7 +59,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <link rel="icon" href="/favicon.ico" />
         <meta name="theme-color" content="#9333EA" />
       </head>
-      <body className="bg-gray-900 text-white antialiased">{children}</body>
+      <Web3ModalProvider><body className="bg-gray-900 text-white antialiased">{children}</body></Web3ModalProvider>
     </html>
   );
 }

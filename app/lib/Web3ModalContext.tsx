@@ -1,6 +1,6 @@
 'use client';
+import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
 import { createWeb3Modal, defaultConfig } from '@web3modal/ethers';
-import { useEffect, useState, useCallback } from 'react';
 import { BrowserProvider, ethers } from 'ethers';
 import { db } from './firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
@@ -10,15 +10,23 @@ interface ExtendedEip1193Provider extends ethers.Eip1193Provider {
   removeListener(event: string, listener: (...args: any[]) => void): void;
 }
 
-const projectId = '28623011573d36852a0944841556a0c5';
+interface Web3ModalContextType {
+  account: string | null;
+  provider: BrowserProvider | null;
+  loading: boolean;
+  connectWallet: (refCode?: string) => Promise<void>;
+  disconnectWallet: () => void;
+}
 
+const Web3ModalContext = createContext<Web3ModalContextType | undefined>(undefined);
+
+const projectId = '28623011573d36852a0944841556a0c5';
 const metadata = {
   name: 'Catcents',
   description: 'Web3 Community Platform',
   url: 'http://localhost:3000',
   icons: ['/favicon.ico'],
 };
-
 const chains = [
   {
     chainId: 10143,
@@ -28,25 +36,28 @@ const chains = [
     rpcUrl: 'https://testnet-rpc.monad.xyz',
   },
 ];
-
 const ethersConfig = defaultConfig({
   metadata,
   defaultChainId: 10143,
   enableEIP6963: true,
   enableCoinbase: false,
 });
-
 const modal = createWeb3Modal({
   ethersConfig,
   chains,
   projectId,
 });
 
-export function useWeb3Modal() {
-  const [account, setAccount] = useState<string | null>(null);
+export function Web3ModalProvider({ children }: { children: ReactNode }) {
+  const [account, setAccount] = useState<string | null>(() => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      return localStorage.getItem('account'); // Load synchronously from localStorage
+    }
+    return null;
+  });
   const [provider, setProvider] = useState<BrowserProvider | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [isInitialized, setIsInitialized] = useState(false); // Track initialization
+  const [loading, setLoading] = useState(true);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   const fetchAccountFromFirebase = useCallback(async (address: string) => {
     const userRef = doc(db, 'users', address.toLowerCase());
@@ -62,7 +73,6 @@ export function useWeb3Modal() {
     if (typeof window === 'undefined' || isInitialized) return;
 
     console.log('Initializing connection');
-    setLoading(true);
     try {
       const cachedProvider = modal.getWalletProvider() as ExtendedEip1193Provider | undefined;
       if (cachedProvider) {
@@ -97,14 +107,17 @@ export function useWeb3Modal() {
         setLoading(true);
 
         await modal.open();
+        console.log('Modal opened, awaiting provider state...');
 
         const connectionPromise = new Promise<void>((resolve, reject) => {
           const unsubscribe = modal.subscribeProvider(async (state) => {
-            console.log('Provider state:', state);
-            if (state.provider && state.isConnected && !account) { // Only set if not already set
+            console.log('Provider state update:', state);
+            if (state.provider && state.isConnected) {
+              console.log('Provider connected, fetching signer...');
               const web3Provider = new ethers.BrowserProvider(state.provider);
               const signer = await web3Provider.getSigner();
               const address = (await signer.getAddress()).toLowerCase();
+              console.log('Signer address:', address);
 
               const userRef = doc(db, 'users', address);
               const userSnap = await getDoc(userRef);
@@ -136,8 +149,9 @@ export function useWeb3Modal() {
 
           setTimeout(() => {
             if (unsubscribe) unsubscribe();
+            console.log('Connection timed out after 60 seconds');
             reject(new Error('Connection timed out'));
-          }, 30000);
+          }, 60000);
         });
 
         await connectionPromise;
@@ -146,12 +160,13 @@ export function useWeb3Modal() {
         setAccount(null);
         setProvider(null);
         if (window.localStorage) localStorage.removeItem('account');
+        throw error;
       } finally {
         setLoading(false);
         console.log('connectWallet finished - Account:', account, 'Loading:', loading);
       }
     },
-    [account] // Add account to prevent re-setting
+    []
   );
 
   const disconnectWallet = useCallback((): void => {
@@ -164,7 +179,7 @@ export function useWeb3Modal() {
   }, []);
 
   useEffect(() => {
-    console.log('useEffect running - Initializing');
+    console.log('Web3ModalProvider useEffect - Initializing');
     initializeConnection();
 
     const cachedProvider = modal.getWalletProvider() as ExtendedEip1193Provider | undefined;
@@ -173,14 +188,14 @@ export function useWeb3Modal() {
       if (accounts.length > 0) {
         const address = accounts[0].toLowerCase();
         fetchAccountFromFirebase(address).then((firebaseAccount) => {
-          if (firebaseAccount && firebaseAccount !== account) { // Only update if different
+          if (firebaseAccount && firebaseAccount !== account) {
             console.log('Setting account from handleAccountsChanged:', firebaseAccount);
             setAccount(firebaseAccount);
             document.cookie = `account=${firebaseAccount}; path=/; max-age=86400`;
             if (window.localStorage) localStorage.setItem('account', firebaseAccount);
           }
         });
-      } else if (account) { // Only disconnect if account exists
+      } else if (account) {
         console.log('No accounts, disconnecting');
         disconnectWallet();
       }
@@ -200,7 +215,7 @@ export function useWeb3Modal() {
     }) as (() => void) | undefined;
 
     return () => {
-      console.log('Cleaning up useEffect');
+      console.log('Cleaning up Web3ModalProvider useEffect');
       if (unsubscribe) unsubscribe();
       if (cachedProvider && cachedProvider.removeListener) {
         cachedProvider.removeListener('accountsChanged', handleAccountsChanged);
@@ -208,5 +223,17 @@ export function useWeb3Modal() {
     };
   }, [initializeConnection, disconnectWallet, fetchAccountFromFirebase]);
 
-  return { account, provider, connectWallet, disconnectWallet, loading };
+  return (
+    <Web3ModalContext.Provider value={{ account, provider, loading, connectWallet, disconnectWallet }}>
+      {children}
+    </Web3ModalContext.Provider>
+  );
+}
+
+export function useWeb3Modal() {
+  const context = useContext(Web3ModalContext);
+  if (context === undefined) {
+    throw new Error('useWeb3Modal must be used within a Web3ModalProvider');
+  }
+  return context;
 }

@@ -6,7 +6,7 @@ import { doc, setDoc, getDoc } from 'firebase/firestore';
 import Sidebar from '../../components/Sidebar';
 import Profile from '../../components/Profile';
 import confetti from 'canvas-confetti';
-import { useWeb3Modal } from '../../lib/useWeb3Modal';
+import { useWeb3Modal } from '../../lib/Web3ModalContext';
 
 const INITIAL_QUESTS = [
   { id: 'connect_twitter', title: 'Connect Twitter', description: 'Link your Twitter account', meowMiles: 20, completed: false, icon: '🔗' },
@@ -28,6 +28,7 @@ export default function QuestsPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [processingQuestId, setProcessingQuestId] = useState<string | null>(null);
   const router = useRouter();
+  const [hasRedirected, setHasRedirected] = useState(false);
 
   const fetchUserData = async (address: string) => {
     setIsLoading(true);
@@ -124,35 +125,39 @@ export default function QuestsPage() {
   };
 
   useEffect(() => {
-    console.log('Quests useEffect - Account:', account, 'Loading:', loading);
+    console.log('Quests useEffect - Account:', account, 'Loading:', loading, 'HasRedirected:', hasRedirected);
     if (loading) return;
-    if (!account) {
+    if (!account && !hasRedirected) {
+      console.log('Quests - Redirecting to /');
+      setHasRedirected(true);
       router.push('/');
       return;
     }
 
-    fetchUserData(account);
+    if (account) {
+      fetchUserData(account);
 
-    const urlParams = new URLSearchParams(window.location.search);
-    const success = urlParams.get('success');
-    if (success) {
-      if (success === 'twitter_connected') {
-        setMessage('Twitter connected successfully!');
-        completeQuest('connect_twitter');
-      } else if (success === 'discord_connected') {
-        setMessage('Discord connected successfully!');
-        completeQuest('connect_discord');
+      const urlParams = new URLSearchParams(window.location.search);
+      const success = urlParams.get('success');
+      if (success) {
+        if (success === 'twitter_connected') {
+          setMessage('Twitter connected successfully!');
+          completeQuest('connect_twitter');
+        } else if (success === 'discord_connected') {
+          setMessage('Discord connected successfully!');
+          completeQuest('connect_discord');
+        }
+        router.replace('/dashboard/quests');
       }
-      router.replace('/dashboard/quests');
-    }
 
-    const error = urlParams.get('error');
-    if (error === 'twitter_failed') {
-      setMessage('Failed to connect Twitter.');
-    } else if (error === 'discord_failed') {
-      setMessage('Failed to connect Discord.');
+      const error = urlParams.get('error');
+      if (error === 'twitter_failed') {
+        setMessage('Failed to connect Twitter.');
+      } else if (error === 'discord_failed') {
+        setMessage('Failed to connect Discord.');
+      }
     }
-  }, [account, loading, router]);
+  }, [account, loading, router, hasRedirected]);
 
   if (loading || isLoading) {
     return <div className="flex min-h-screen items-center justify-center bg-gray-900 text-white">Loading...</div>;

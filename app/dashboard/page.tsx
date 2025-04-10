@@ -5,7 +5,7 @@ import { db } from '../lib/firebase';
 import { doc, getDoc, setDoc, increment } from 'firebase/firestore';
 import Sidebar from '../components/Sidebar';
 import Profile from '../components/Profile';
-import { useWeb3Modal } from '../lib/useWeb3Modal';
+import { useWeb3Modal } from '../lib/Web3ModalContext';
 import toast, { Toaster } from 'react-hot-toast';
 import { ethers } from 'ethers';
 
@@ -17,6 +17,7 @@ export default function DashboardPage() {
   const [countdown, setCountdown] = useState<string>('24:00:00');
   const [checkingIn, setCheckingIn] = useState(false);
   const router = useRouter();
+  const [hasRedirected, setHasRedirected] = useState(false); // Prevent multiple redirects
 
   const fetchUserData = async (address: string) => {
     try {
@@ -138,15 +139,18 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    console.log('Dashboard useEffect - Account:', account, 'Loading:', loading);
+    console.log('Dashboard - useEffect - Account:', account, 'Loading:', loading, 'HasRedirected:', hasRedirected);
     if (loading) return;
-    if (!account) {
+    if (!account && !hasRedirected) {
+      console.log('Dashboard - Redirecting to /');
+      setHasRedirected(true);
       router.push('/');
-    } else {
+    } else if (account) {
+      console.log('Dashboard - Fetching data for:', account);
       fetchUserData(account);
       fetchMonBalance(account);
     }
-  }, [account, loading, router]);
+  }, [account, loading, router, hasRedirected]);
 
   if (loading) return <div className="flex min-h-screen items-center justify-center bg-black text-white">Loading...</div>;
   if (!account) return null;
