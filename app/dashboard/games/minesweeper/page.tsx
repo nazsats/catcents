@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { doc, getDoc, setDoc, runTransaction, increment } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
-import { useWallet } from '../../../lib/useWallet';
+import { useWeb3Modal } from '../../../lib/useWeb3Modal';
 import { ethers } from 'ethers';
 import Sidebar from '../../../components/Sidebar';
 import Profile from '../../../components/Profile';
@@ -14,7 +14,7 @@ const TOTAL_CELLS = GRID_SIZE * GRID_SIZE;
 const TOTAL_MINES = 20;
 const INITIAL_BET = 0.01; // 0.01 MON
 
-const contractAddress = '0x27DF24e9Ed3F256FE4Eea32311848F5a978Ab96e'; // Replace with your deployed address
+const contractAddress = '0x27DF24e9Ed3F256FE4Eea32311848F5a978Ab96e';
 const contractABI = [
   'function placeBet() external payable',
   'function withdrawFunds() external',
@@ -25,7 +25,7 @@ const contractABI = [
 const catEmojis = ['😺', '🐱', '🐾', '🐈', '😻', '🙀', '🐯', '🦁', '🐰', '🐾'];
 
 export default function Minesweeper() {
-  const { account, disconnectWallet, loading } = useWallet();
+  const { account, disconnectWallet, loading, provider } = useWeb3Modal();
   const [grid, setGrid] = useState<any[]>([]);
   const [gameOver, setGameOver] = useState(false);
   const [gameStarted, setGameStarted] = useState(false);
@@ -88,6 +88,7 @@ export default function Minesweeper() {
   };
 
   useEffect(() => {
+    console.log('Minesweeper useEffect - Account:', account, 'Loading:', loading);
     if (loading) return;
     if (!account) {
       router.push('/');
@@ -98,14 +99,13 @@ export default function Minesweeper() {
   }, [account, loading, router]);
 
   const placeBet = async () => {
-    if (!window.ethereum) {
-      toast.error('MetaMask not detected');
+    if (!provider) {
+      toast.error('Wallet provider not detected');
       return;
     }
 
     setIsBetting(true);
     try {
-      const provider = new ethers.BrowserProvider(window.ethereum as ethers.Eip1193Provider);
       const signer = await provider.getSigner();
       const contract = new ethers.Contract(contractAddress, contractABI, signer);
 
@@ -201,13 +201,12 @@ export default function Minesweeper() {
   };
 
   const withdrawFunds = async () => {
-    if (!account || account.toLowerCase() !== '0x6D54EF5Fa17d69717Ff96D2d868e040034F26024'.toLowerCase()) {
+    if (!account || account.toLowerCase() !== '0x6D54EF5Fa17d69717Ff96D2d868e040034F26024'.toLowerCase() || !provider) {
       toast.error('Only admin can withdraw funds');
       return;
     }
 
     try {
-      const provider = new ethers.BrowserProvider(window.ethereum as ethers.Eip1193Provider);
       const signer = await provider.getSigner();
       const contract = new ethers.Contract(contractAddress, contractABI, signer);
 
@@ -230,8 +229,11 @@ export default function Minesweeper() {
   };
 
   const checkBalance = async () => {
+    if (!provider) {
+      toast.error('Wallet provider not detected');
+      return;
+    }
     try {
-      const provider = new ethers.BrowserProvider(window.ethereum as ethers.Eip1193Provider);
       const contract = new ethers.Contract(contractAddress, contractABI, provider);
       const balance = await contract.getContractBalance();
       console.log('Contract balance:', ethers.formatEther(balance), 'MON');
@@ -252,6 +254,8 @@ export default function Minesweeper() {
     );
   }
 
+  if (!account) return null;
+
   return (
     <div className="flex min-h-screen bg-gradient-to-br from-black to-purple-950 text-white">
       <Sidebar onDisconnect={disconnectWallet} />
@@ -259,7 +263,7 @@ export default function Minesweeper() {
         <Toaster position="top-right" toastOptions={{ style: { background: '#1a1a1a', color: '#fff', border: '1px solid #9333ea' } }} />
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-purple-300">Minesweeper</h1>
-          <Profile account={account!} onCopyAddress={() => navigator.clipboard.writeText(account!)} />
+          <Profile account={account} onCopyAddress={() => navigator.clipboard.writeText(account)} />
         </div>
 
         <div className="flex justify-between mb-6">

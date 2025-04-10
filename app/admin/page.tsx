@@ -5,13 +5,13 @@ import { db } from '../lib/firebase';
 import { doc, setDoc, getDocs, collection, deleteDoc, query, orderBy, Timestamp } from 'firebase/firestore';
 import Sidebar from '../components/Sidebar';
 import Profile from '../components/Profile';
-import { useWallet } from '../lib/useWallet';
+import { useWeb3Modal } from '../lib/useWeb3Modal'; // Static import
 import toast, { Toaster } from 'react-hot-toast';
 
 const ADMIN_WALLET = '0x6D54EF5Fa17d69717Ff96D2d868e040034F26024'.toLowerCase();
 
 export default function AdminProposals() {
-  const { account, disconnectWallet } = useWallet();
+  const { account, disconnectWallet, loading } = useWeb3Modal();
   const [proposals, setProposals] = useState<
     { id: string; author: string; title: string; content: string; date: string; image?: string }[]
   >([]);
@@ -46,6 +46,8 @@ export default function AdminProposals() {
   };
 
   useEffect(() => {
+    console.log('Admin useEffect - Account:', account, 'Loading:', loading);
+    if (loading) return;
     if (!account) {
       router.push('/');
     } else if (account.toLowerCase() !== ADMIN_WALLET) {
@@ -54,7 +56,7 @@ export default function AdminProposals() {
     } else {
       fetchProposals();
     }
-  }, [account, router]);
+  }, [account, loading, router]);
 
   const handleAddProposal = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,7 +99,7 @@ export default function AdminProposals() {
     }
   };
 
-  if (isLoading) {
+  if (loading || isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-black to-purple-950 text-white">
         <svg className="animate-spin h-8 w-8 text-purple-400" viewBox="0 0 24 24">
@@ -107,6 +109,8 @@ export default function AdminProposals() {
     );
   }
 
+  if (!account) return null;
+
   return (
     <div className="flex min-h-screen bg-gradient-to-br from-black to-purple-950 text-white">
       <Sidebar onDisconnect={disconnectWallet} />
@@ -114,7 +118,7 @@ export default function AdminProposals() {
         <Toaster position="top-right" toastOptions={{ style: { background: '#1a1a1a', color: '#fff', border: '1px solid #9333ea' } }} />
         <div className="flex justify-between items-center mb-8">
           <h2 className="text-xl font-semibold text-purple-300">Admin - Manage Proposals</h2>
-          <Profile account={account!} onCopyAddress={() => navigator.clipboard.writeText(account!)} />
+          <Profile account={account} onCopyAddress={() => navigator.clipboard.writeText(account)} />
         </div>
 
         <div className="bg-black/80 rounded-lg p-6 border border-purple-900 mb-8">

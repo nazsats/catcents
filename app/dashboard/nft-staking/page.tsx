@@ -1,16 +1,35 @@
-// app/nft-staking/page.tsx
 'use client';
-import { useWallet } from '../../lib/useWallet';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Sidebar from '../../components/Sidebar';
 import Profile from '../../components/Profile';
+import { useWeb3Modal } from '../../lib/useWeb3Modal'; // Static import
 
 export default function NFTStaking() {
-  const { account, disconnectWallet } = useWallet();
+  const { account, disconnectWallet, loading } = useWeb3Modal();
+  const router = useRouter();
+
   const handleCopyAddress = () => {
     if (account) navigator.clipboard.writeText(account);
   };
 
-  if (!account) return <div>Loading...</div>;
+  useEffect(() => {
+    console.log('NFT Staking useEffect - Account:', account, 'Loading:', loading);
+    if (loading) return;
+    if (!account) {
+      router.push('/');
+    }
+  }, [account, loading, router]);
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-black to-purple-950 text-white">
+        Loading...
+      </div>
+    );
+  }
+
+  if (!account) return null;
 
   return (
     <div className="flex min-h-screen bg-gradient-to-br from-black to-purple-950 text-white">

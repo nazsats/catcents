@@ -6,7 +6,7 @@ import { doc, getDoc, setDoc, collection, getDocs, query, orderBy, Timestamp, in
 import { ethers } from 'ethers';
 import Sidebar from '../../components/Sidebar';
 import Profile from '../../components/Profile';
-import { useWallet } from '../../lib/useWallet';
+import { useWeb3Modal } from '../../lib/useWeb3Modal';
 import toast, { Toaster } from 'react-hot-toast';
 
 const DEMO_PROPOSALS = [
@@ -24,7 +24,7 @@ const getRandomCatEmoji = (seed: string) => {
 };
 
 export default function Proposals() {
-  const { account, loading, disconnectWallet } = useWallet();
+  const { account, provider, loading, disconnectWallet } = useWeb3Modal();
   const [proposals, setProposals] = useState<
     { id: string; author: string; title: string; content: string; date: string; image?: string; yesVotes: number; noVotes: number; likedByUser: boolean; votedByUser: 'yes' | 'no' | null; isExpanded: boolean; isLiking?: boolean; isVoting?: boolean }[]
   >([]);
@@ -108,6 +108,7 @@ export default function Proposals() {
   };
 
   useEffect(() => {
+    console.log('Proposals useEffect - Account:', account, 'Loading:', loading);
     if (loading) return;
     if (account) {
       fetchProposalsAndUserData(account);
@@ -142,7 +143,7 @@ export default function Proposals() {
   };
 
   const handleVote = async (propId: string, vote: 'yes' | 'no') => {
-    if (!account || !window.ethereum) {
+    if (!account || !provider) {
       toast.error('Please connect your wallet');
       return;
     }
@@ -158,7 +159,6 @@ export default function Proposals() {
     try {
       const voteSnap = await getDoc(voteRef);
       if (!voteSnap.exists()) {
-        const provider = new ethers.BrowserProvider(window.ethereum);
         const signer = await provider.getSigner();
         const contractAddress = '0x9C451d8065314504Bb90f37c8b6431c57Fc655C4';
         const contractABI = [
@@ -240,6 +240,8 @@ export default function Proposals() {
     );
   }
 
+  if (!account) return null;
+
   return (
     <div className="flex min-h-screen bg-gradient-to-br from-black to-purple-950 text-white">
       <Sidebar onDisconnect={disconnectWallet} />
@@ -247,7 +249,7 @@ export default function Proposals() {
         <Toaster position="top-right" toastOptions={{ style: { background: '#1a1a1a', color: '#fff', border: '1px solid #9333ea' } }} />
         <div className="flex justify-between items-center mb-8">
           <h2 className="text-xl font-semibold text-purple-300">Proposals</h2>
-          <Profile account={account!} onCopyAddress={() => navigator.clipboard.writeText(account!)} />
+          <Profile account={account} onCopyAddress={() => navigator.clipboard.writeText(account)} />
         </div>
 
         {error && <div className="text-red-400 mb-4">{error}</div>}

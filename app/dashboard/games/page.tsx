@@ -1,33 +1,18 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { ethers } from 'ethers';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { db } from '../../lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import Sidebar from '../../components/Sidebar';
 import Profile from '../../components/Profile';
+import { useWeb3Modal } from '../../lib/useWeb3Modal';
 
 export default function Games() {
-  const [account, setAccount] = useState<string | null>(null);
+  const { account, disconnectWallet, loading } = useWeb3Modal();
   const [gamesGmeow, setGamesGmeow] = useState(0);
   const [gameScores, setGameScores] = useState<{ [key: string]: number }>({});
   const router = useRouter();
-
-  const checkWalletConnection = async () => {
-    try {
-      if (!window.ethereum) throw new Error('MetaMask not installed');
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      const accounts = await provider.listAccounts();
-      if (accounts.length > 0) {
-        setAccount(accounts[0].address.toLowerCase());
-      } else {
-        router.push('/');
-      }
-    } catch (error) {
-      console.error('Wallet connection failed:', error);
-    }
-  };
 
   const fetchGameScores = async (userAddress: string) => {
     try {
@@ -35,7 +20,7 @@ export default function Games() {
       const userDoc = await getDoc(userDocRef);
       if (userDoc.exists()) {
         const data = userDoc.data();
-        setGamesGmeow(Math.floor(data.gamesGmeow || 0)); // Round down to integer
+        setGamesGmeow(Math.floor(data.gamesGmeow || 0));
         setGameScores({
           minesweeper: data.minesweeperBestScore || 0,
         });
@@ -46,19 +31,14 @@ export default function Games() {
   };
 
   useEffect(() => {
-    checkWalletConnection();
-  }, []);
-
-  useEffect(() => {
-    if (account) {
-      fetchGameScores(account);
+    console.log('Games useEffect - Account:', account, 'Loading:', loading);
+    if (loading) return;
+    if (!account) {
+      router.push('/');
+      return;
     }
-  }, [account]);
-
-  const handleDisconnect = () => {
-    setAccount(null);
-    router.push('/');
-  };
+    fetchGameScores(account);
+  }, [account, loading, router]);
 
   const handleCopyAddress = () => {
     if (account) {
@@ -66,9 +46,11 @@ export default function Games() {
     }
   };
 
-  if (!account) {
+  if (loading) {
     return <div className="flex min-h-screen items-center justify-center bg-black text-white">Loading...</div>;
   }
+
+  if (!account) return null;
 
   const games = [
     {
@@ -95,7 +77,7 @@ export default function Games() {
 
   return (
     <div className="flex min-h-screen bg-gradient-to-br from-black to-purple-950 text-white">
-      <Sidebar onDisconnect={handleDisconnect} />
+      <Sidebar onDisconnect={disconnectWallet} />
       <main className="flex-1 p-8">
         <div className="flex justify-between items-center mb-8">
           <h2 className="text-xl font-semibold text-purple-300">Games</h2>

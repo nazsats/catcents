@@ -1,20 +1,22 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { ethers } from 'ethers';
+import { useRouter } from 'next/navigation';
 import { db } from '../lib/firebase';
 import { doc, getDoc, setDoc, increment } from 'firebase/firestore';
 import Sidebar from '../components/Sidebar';
 import Profile from '../components/Profile';
+import { useWeb3Modal } from '../lib/useWeb3Modal';
 import toast, { Toaster } from 'react-hot-toast';
+import { ethers } from 'ethers';
 
 export default function DashboardPage() {
-  const [account, setAccount] = useState<string | null>(null);
+  const { account, provider, disconnectWallet, loading } = useWeb3Modal();
   const [meowMiles, setMeowMiles] = useState({ quests: 0, proposals: 0, games: 0, referrals: 0, total: 0 });
   const [monBalance, setMonBalance] = useState<string>('0');
   const [lastCheckIn, setLastCheckIn] = useState<number | null>(null);
   const [countdown, setCountdown] = useState<string>('24:00:00');
   const [checkingIn, setCheckingIn] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
   const fetchUserData = async (address: string) => {
     try {
@@ -38,19 +40,18 @@ export default function DashboardPage() {
       }
     } catch (error) {
       console.error('Failed to fetch user data:', error);
+      toast.error('Failed to load user data');
     }
   };
 
   const fetchMonBalance = async (address: string) => {
     try {
-      if (!window.ethereum) {
-        console.error('MetaMask not detected');
+      if (!provider) {
         setMonBalance('N/A');
         return;
       }
-      const provider = new ethers.BrowserProvider(window.ethereum as ethers.Eip1193Provider);
       const balance = await provider.getBalance(address);
-      setMonBalance(Number(ethers.formatEther(balance)).toFixed(4));
+      setMonBalance(ethers.formatEther(balance).slice(0, 6));
     } catch (error) {
       console.error('Failed to fetch MON balance:', error);
       setMonBalance('Error');
@@ -58,14 +59,13 @@ export default function DashboardPage() {
   };
 
   const handleDailyCheckIn = async () => {
-    if (!account || !window.ethereum || checkingIn) return;
+    if (!account || !provider || checkingIn) return;
     const now = Date.now();
     const oneDay = 24 * 60 * 60 * 1000;
     if (lastCheckIn && now - lastCheckIn < oneDay) return;
 
     setCheckingIn(true);
     try {
-      const provider = new ethers.BrowserProvider(window.ethereum as ethers.Eip1193Provider);
       const signer = await provider.getSigner();
       const tx = await signer.sendTransaction({
         to: '0xfF8b7625894441C26fEd460dD21360500BF4E767',
@@ -74,8 +74,10 @@ export default function DashboardPage() {
 
       const pendingToast = toast.loading('Processing check-in transaction...');
       const receipt = await tx.wait();
+
+      // Check if receipt is null before accessing hash
       if (!receipt) {
-        throw new Error('Transaction receipt is null');
+        throw new Error('Transaction receipt not received');
       }
       const txHash = receipt.hash;
 
@@ -90,19 +92,14 @@ export default function DashboardPage() {
       toast.success(
         <div>
           Check-in completed!{' '}
-          <a
-            href={`https://testnet.monadscan.com/tx/${txHash}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline text-cyan-400 hover:text-cyan-300"
-          >
+          <a href={`https://testnet.monadscan.com/tx/${txHash}`} target="_blank" rel="noopener noreferrer" className="underline text-cyan-400 hover:text-cyan-300">
             View on MonadScan
           </a>
         </div>,
         { duration: 5000 }
       );
     } catch (error) {
-      console.error('Daily check-in transaction failed:', error);
+      console.error('Daily check-in failed:', error);
       toast.error('Failed to check-in: ' + (error as Error).message);
     } finally {
       setCheckingIn(false);
@@ -131,50 +128,25 @@ export default function DashboardPage() {
   };
 
   const handleCopyAddress = () => {
-    if (account) navigator.clipboard.writeText(account);
-  };
-
-  const disconnectWallet = () => {
-    console.log('Disconnecting wallet...');
-    setAccount(null);
-    window.location.href = '/'; // Force redirect to landing page
+    if (account) {
+      navigator.clipboard.writeText(account);
+      toast.success('Address copied!');
+    }
   };
 
   useEffect(() => {
-    const initializeAccount = async () => {
-      if (!window.ethereum) {
-        setLoading(false);
-        return;
-      }
+    console.log('Dashboard useEffect - Account:', account, 'Loading:', loading);
+    if (loading) return;
+    if (!account) {
+      router.push('/');
+    } else {
+      fetchUserData(account);
+      fetchMonBalance(account);
+    }
+  }, [account, loading, router]);
 
-      try {
-        const provider = new ethers.BrowserProvider(window.ethereum);
-        const accounts = await provider.listAccounts();
-        if (accounts.length > 0) {
-          const address = accounts[0].address.toLowerCase();
-          console.log('Found connected account:', address);
-          setAccount(address);
-          fetchUserData(address);
-          fetchMonBalance(address);
-        }
-      } catch (error) {
-        console.error('Failed to initialize account:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    initializeAccount();
-  }, []);
-
-  if (loading) {
-    return <div className="flex min-h-screen items-center justify-center bg-black text-white">Loading...</div>;
-  }
-
-  if (!account) {
-    window.location.href = '/'; // Redirect to landing if no account
-    return null;
-  }
+  if (loading) return <div className="flex min-h-screen items-center justify-center bg-black text-white">Loading...</div>;
+  if (!account) return null;
 
   return (
     <div className="flex min-h-screen bg-gradient-to-br from-black to-purple-950 text-white">
@@ -185,7 +157,6 @@ export default function DashboardPage() {
           <h2 className="text-xl font-semibold text-purple-300">Dashboard</h2>
           <Profile account={account} onCopyAddress={handleCopyAddress} />
         </div>
-
         <div className="flex space-x-6">
           <div className="flex-1 space-y-6">
             <div className="bg-black/80 rounded-lg p-6 text-center border border-purple-900 shadow-lg shadow-purple-500/20 animate-glow">
@@ -194,7 +165,6 @@ export default function DashboardPage() {
                 {meowMiles.total}
               </p>
             </div>
-
             <div className="bg-black/80 rounded-lg p-6 border border-purple-900 shadow-lg shadow-purple-500/20">
               <h4 className="text-lg font-semibold mb-4 text-purple-400">Score Breakdown</h4>
               <div className="grid grid-cols-3 gap-4">
@@ -213,13 +183,11 @@ export default function DashboardPage() {
               </div>
             </div>
           </div>
-
           <div className="w-80 space-y-6">
             <div className="bg-black/80 rounded-lg p-6 border border-purple-900 shadow-lg shadow-purple-500/20">
               <h4 className="text-lg font-semibold mb-2 text-purple-400">Assets</h4>
               <p className="text-2xl font-bold text-cyan-400">Available MON: {monBalance}</p>
             </div>
-
             <div className="bg-black/80 rounded-lg p-6 border border-purple-900 shadow-lg shadow-purple-500/20">
               <h4 className="text-lg font-semibold mb-4 text-purple-400">Daily Check-In</h4>
               <div className="space-y-4">
@@ -233,38 +201,9 @@ export default function DashboardPage() {
                 </button>
               </div>
             </div>
-
-            <div className="bg-black/80 rounded-lg p-6 border border-purple-900 shadow-lg shadow-purple-500/20">
-              <h4 className="text-lg font-semibold mb-4 text-purple-400">Referral Program</h4>
-              <p className="text-gray-300 mb-2">Your Referral Link:</p>
-              <div className="flex items-center space-x-2">
-                <input
-                  type="text"
-                  value={account ? `${window.location.origin}/?ref=${account}` : ''}
-                  readOnly
-                  className="flex-1 bg-gray-900 text-white p-2 rounded-lg border border-purple-900"
-                />
-                <button
-                  onClick={() => account && navigator.clipboard.writeText(`${window.location.origin}/?ref=${account}`)}
-                  className="bg-purple-600 px-4 py-2 rounded-lg hover:bg-purple-700"
-                >
-                  Copy
-                </button>
-              </div>
-              <p className="text-gray-300 mt-4">Referrals: {meowMiles.referrals}</p>
-            </div>
           </div>
         </div>
       </main>
-
-      <style jsx>{`
-        @keyframes glow {
-          0% { box-shadow: 0 0 5px rgba(147, 51, 234, 0.5), 0 0 10 Wpx rgba(147, 51, 234, 0.3); }
-          50% { box-shadow: 0 0 20px rgba(147, 51, 234, 0.8), 0 0 30px rgba(147, 51, 234, 0.5); }
-          100% { box-shadow: 0 0 5px rgba(147, 51, 234, 0.5), 0 0 10px rgba(147, 51, 234, 0.3); }
-        }
-        .animate-glow { animation: glow 2s infinite; }
-      `}</style>
     </div>
   );
 }
