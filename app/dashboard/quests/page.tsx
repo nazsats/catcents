@@ -11,7 +11,7 @@ import toast, { Toaster } from 'react-hot-toast';
 import Image from 'next/image';
 
 // Replace this with your actual deployed domain
-const DEPLOYED_DOMAIN = 'https://yourdomain.com'; // Update this to your live domain, e.g., 'https://catcents.io'
+const DEPLOYED_DOMAIN = 'https://catcents.io'; // Replace with your actual live domain
 
 const INITIAL_QUESTS = [
   { id: 'connect_twitter', title: 'Connect Twitter', description: 'Link your Twitter account', meowMiles: 30, completed: false, icon: '/quest/link.png' },
@@ -56,7 +56,7 @@ export default function QuestsPage() {
         const newReferralLink = `${DEPLOYED_DOMAIN}/?ref=${address}`;
         setReferralLink(newReferralLink);
 
-        // Update Firebase if the stored referral link is outdated (e.g., contains localhost)
+        // Update Firebase if the stored referral link is outdated
         if (data.referralLink && data.referralLink !== newReferralLink) {
           await setDoc(userRef, { referralLink: newReferralLink }, { merge: true });
         }
@@ -135,8 +135,11 @@ export default function QuestsPage() {
   };
 
   const handleCopyReferralLink = () => {
-    navigator.clipboard.writeText(referralLink);
-    toast.success('Referral link copied!');
+    if (account) {
+      const referralLinkToCopy = `${DEPLOYED_DOMAIN}/?ref=${account}`;
+      navigator.clipboard.writeText(referralLinkToCopy);
+      toast.success('Referral link copied!');
+    }
   };
 
   const handleCopyAddress = () => {
