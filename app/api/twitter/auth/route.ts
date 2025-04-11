@@ -1,14 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import Twitter from 'twitter-lite';
 
-// In-memory store for walletAddress (for local testing only)
-const tokenStore = new Map<string, string>();
+// Ensure environment variables are present at build time
+if (!process.env.TWITTER_API_KEY || !process.env.TWITTER_API_SECRET || !process.env.NEXTAUTH_URL) {
+  throw new Error('Missing required Twitter API environment variables');
+}
 
 const twitterClient = new Twitter({
-  consumer_key: process.env.TWITTER_API_KEY!,
-  consumer_secret: process.env.TWITTER_API_SECRET!,
+  consumer_key: process.env.TWITTER_API_KEY,
+  consumer_secret: process.env.TWITTER_API_SECRET,
 });
 
 export async function GET(request: NextRequest) {
@@ -18,21 +20,21 @@ export async function GET(request: NextRequest) {
     const walletAddress = searchParams.get('walletAddress');
     const oauthToken = searchParams.get('oauth_token');
     const oauthVerifier = searchParams.get('oauth_verifier');
+    const CALLBACK_URL = process.env.TWITTER_CALLBACK_URL || `${process.env.NEXTAUTH_URL}/api/twitter/auth`;
 
     console.log('Wallet Address:', walletAddress);
     console.log('OAuth Token:', oauthToken);
     console.log('OAuth Verifier:', oauthVerifier);
+    console.log('Callback URL sent to Twitter:', CALLBACK_URL);
 
     if (!oauthToken || !oauthVerifier) {
       if (!walletAddress) {
-        console.log('No wallet address provided in initial request');
-        return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/dashboard/quests?error=twitter_failed`);
+        console.log('No wallet address provided');
+        return NextResponse.redirect(new URL('/dashboard/quests?error=twitter_failed', request.url));
       }
 
       console.log('Generating request token');
-      const response = await twitterClient.getRequestToken(
-        `${process.env.NEXTAUTH_URL}/api/twitter/auth`
-      );
+      const response = await twitterClient.getRequestToken(CALLBACK_URL);
       console.log('Request token response:', response);
 
       if (response.oauth_callback_confirmed !== 'true') {
@@ -40,19 +42,23 @@ export async function GET(request: NextRequest) {
         throw new Error('OAuth callback not confirmed');
       }
 
-      tokenStore.set(response.oauth_token, walletAddress);
-      console.log('Stored walletAddress in tokenStore:', walletAddress);
+      const tempRef = doc(db, 'twitter_auth_temp', response.oauth_token);
+      await setDoc(tempRef, { walletAddress, createdAt: new Date().toISOString() });
+      console.log('Stored walletAddress in Firebase:', walletAddress);
 
       const redirectUrl = `https://api.twitter.com/oauth/authorize?oauth_token=${response.oauth_token}`;
       console.log('Redirecting to:', redirectUrl);
       return NextResponse.redirect(redirectUrl);
     }
 
-    const storedWalletAddress = tokenStore.get(oauthToken);
+    const tempRef = doc(db, 'twitter_auth_temp', oauthToken);
+    const tempSnap = await getDoc(tempRef);
+    const storedWalletAddress = tempSnap.exists() ? tempSnap.data().walletAddress : null;
     console.log('Retrieved stored walletAddress:', storedWalletAddress);
+
     if (!storedWalletAddress) {
-      console.log('No stored wallet address found for this oauth_token');
-      return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/dashboard/quests?error=twitter_failed`);
+      console.log('No stored wallet address found');
+      return NextResponse.redirect(new URL('/dashboard/quests?error=twitter_failed', request.url));
     }
 
     console.log('Handling callback with token and verifier');
@@ -66,26 +72,31 @@ export async function GET(request: NextRequest) {
     console.log('Extracted username:', username);
 
     const userRef = doc(db, 'users', storedWalletAddress);
-    await setDoc(
-      userRef,
-      {
-        twitterUsername: username,
-        updatedAt: new Date().toISOString(),
-      },
-      { merge: true }
-    );
+    await setDoc(userRef, { twitterUsername: username, updatedAt: new Date().toISOString() }, { merge: true });
     console.log('Stored username in Firebase:', username);
 
-    tokenStore.delete(oauthToken);
+    await deleteDoc(tempRef);
+    console.log('Cleaned up temporary storage');
 
     console.log('Redirecting to success');
-    return NextResponse.redirect(
-      `${process.env.NEXTAUTH_URL}/dashboard/quests?success=twitter_connected`
-    );
+    return NextResponse.redirect(new URL('/dashboard/quests?success=twitter_connected', request.url));
   } catch (error) {
-    console.error('Twitter auth error:', error);
-    return NextResponse.redirect(
-      `${process.env.NEXTAUTH_URL}/dashboard/quests?error=twitter_failed`
-    );
+    // Type assertion: Treat error as an Error with optional response
+    const errorDetails: { message?: string; stack?: string; response?: any } = {};
+    
+    if (error instanceof Error) {
+      errorDetails.message = error.message;
+      errorDetails.stack = error.stack;
+    }
+    
+    // Check if error has a response (common with twitter-lite)
+    if (error && typeof error === 'object' && 'response' in error) {
+      errorDetails.response = (error as any).response?.data || null;
+    } else {
+      errorDetails.response = null;
+    }
+
+    console.error('Twitter auth error:', errorDetails);
+    return NextResponse.redirect(new URL('/dashboard/quests?error=twitter_failed', request.url));
   }
 }
