@@ -11,6 +11,8 @@
 .animate-fade-in-out {
   animation: fade-in-out 2s ease-in-out forwards;
 }
+
+
 /* Manual character splitting */
 .split-char {
   display: inline-block;
@@ -24,6 +26,12 @@ video {
 }
 
 /* Ensure visibility */
-button, img {
+button,
+img {
   opacity: 1 !important; /* Force initial visibility before animation */
+}
+
+/* Navbar styles */
+nav {
+  opacity: 1 !important; /* Ensure navbar is visible initially */
 }

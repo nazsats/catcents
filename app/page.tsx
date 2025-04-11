@@ -9,10 +9,12 @@ export default function LandingPage() {
   const { account, connectWallet, loading } = useWeb3Modal();
   const [refCode, setRefCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const titleRef = useRef<HTMLHeadingElement>(null); // Typed as HTMLHeadingElement
-  const logoRef = useRef<HTMLDivElement>(null); // Typed as HTMLDivElement
-  const contentRef = useRef<HTMLDivElement>(null); // Typed as HTMLDivElement
-  const buttonRef = useRef<HTMLButtonElement>(null); // Typed as HTMLButtonElement
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const logoRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const navRef = useRef<HTMLElement>(null);
+
   const router = useRouter();
 
   // Handle referral code and redirect
@@ -37,6 +39,7 @@ export default function LandingPage() {
     console.log('Logo ref:', logoRef.current);
     console.log('Content ref:', contentRef.current);
     console.log('Button ref:', buttonRef.current);
+    console.log('Nav ref:', navRef.current);
 
     // Manually split the title into characters
     const titleElement = titleRef.current;
@@ -88,6 +91,15 @@ export default function LandingPage() {
         '-=0.5'
       );
     }
+
+    // Animate nav
+    if (navRef.current) {
+      tl.from(navRef.current, {
+        opacity: 0,
+        y: -20,
+        duration: 0.5,
+      }, '-=0.8');
+    }
   }, [loading, account]);
 
   const handleConnectWallet = async () => {
@@ -120,6 +132,42 @@ export default function LandingPage() {
       {/* Overlay - z-10 */}
       <div className="absolute inset-0 bg-black/50 z-10"></div>
 
+      {/* Navbar - z-50 */}
+      <nav
+        ref={navRef}
+        className="absolute top-0 left-0 right-0 z-50 flex justify-between items-center p-6 bg-transparent"
+      >
+        {/* Left Side: Bigger Logo */}
+        <div className="flex items-center">
+          <Image
+            src="/logo.png" // Navbar logo
+            alt="Catcents Logo"
+            width={80} // Increased size
+            height={80}
+          />
+        </div>
+
+        {/* Right Side: Bigger X Icon and Join Discord Button */}
+        <div className="flex items-center space-x-4">
+          <a href="https://x.com/CatCentsio/" target="_blank" rel="noopener noreferrer">
+            <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 23 23">
+              <path d="M13.2492 9.43523L21.4392 0.124512H19.4985L12.3871 8.20887L6.70726 0.124512H0.15625L8.74527 12.3495L0.15625 22.1132H2.09713L9.60692 13.5759L15.6052 22.1132H22.1562L13.2488 9.43523H13.2492ZM10.5909 12.4572L9.72069 11.2399L2.79645 1.55343H5.77752L11.3655 9.3707L12.2357 10.588L19.4994 20.7493H16.5183L10.5909 12.4577V12.4572Z" />
+            </svg>
+          </a>
+          <a
+            href="https://discord.gg/TXPbt7ztMC"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center bg-purple-600 px-4 py-2 rounded-full text-sm font-semibold text-white hover:bg-purple-700 transition-all"
+          >
+            Join Discord
+            <svg className="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+            </svg>
+          </a>
+        </div>
+      </nav>
+
       {/* Main Content - z-20 */}
       <div className="relative z-20 flex min-h-screen items-center justify-center p-6">
         <div className="text-center max-w-lg w-full">
@@ -142,9 +190,9 @@ export default function LandingPage() {
                 <h1 ref={titleRef} className="text-5xl md:text-6xl font-bold text-white"></h1>
                 <div ref={logoRef}>
                   <Image
-                    src="/logo.png" // Ensure this exists in /public/
+                    src="/logo.png" // Main content logo
                     alt="Catcents Logo"
-                    width={50} // Adjust size as needed
+                    width={50}
                     height={50}
                   />
                 </div>
