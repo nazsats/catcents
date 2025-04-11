@@ -11,4 +11,19 @@
 .animate-fade-in-out {
   animation: fade-in-out 2s ease-in-out forwards;
 }
+/* Manual character splitting */
+.split-char {
+  display: inline-block;
+}
 
+/* Video background */
+video {
+  object-fit: cover;
+  width: 100%;
+  height: 100%;
+}
+
+/* Ensure visibility */
+button, img {
+  opacity: 1 !important; /* Force initial visibility before animation */
+}
