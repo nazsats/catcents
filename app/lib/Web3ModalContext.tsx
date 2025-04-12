@@ -4,6 +4,7 @@ import { createWeb3Modal, defaultConfig } from '@web3modal/ethers';
 import { BrowserProvider, ethers } from 'ethers';
 import { db } from './firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+import toast from 'react-hot-toast';
 
 interface ExtendedEip1193Provider extends ethers.Eip1193Provider {
   on(event: string, listener: (...args: any[]) => void): void;
@@ -24,7 +25,7 @@ const projectId = '28623011573d36852a0944841556a0c5';
 const metadata = {
   name: 'Catcents',
   description: 'Web3 Community Platform',
-  url: 'http://localhost:3000',
+  url: process.env.NEXT_PUBLIC_URL || 'https://www.catcents.io',
   icons: ['/favicon.ico'],
 };
 const chains = [
@@ -46,12 +47,17 @@ const modal = createWeb3Modal({
   ethersConfig,
   chains,
   projectId,
+  themeMode: 'dark',
+  themeVariables: {
+    '--w3m-accent': '#9333ea',
+    '--w3m-font-family': 'Inter, sans-serif',
+  },
 });
 
 export function Web3ModalProvider({ children }: { children: ReactNode }) {
   const [account, setAccount] = useState<string | null>(() => {
     if (typeof window !== 'undefined' && window.localStorage) {
-      return localStorage.getItem('account'); // Load synchronously from localStorage
+      return localStorage.getItem('account');
     }
     return null;
   });
@@ -66,6 +72,7 @@ export function Web3ModalProvider({ children }: { children: ReactNode }) {
       console.log('Account fetched from Firebase:', address);
       return address;
     }
+    console.log('No Firebase account for:', address);
     return null;
   }, []);
 
@@ -73,12 +80,13 @@ export function Web3ModalProvider({ children }: { children: ReactNode }) {
     if (typeof window === 'undefined' || isInitialized) return;
 
     console.log('Initializing connection');
+    setLoading(true);
     try {
       const cachedProvider = modal.getWalletProvider() as ExtendedEip1193Provider | undefined;
       if (cachedProvider) {
         const web3Provider = new ethers.BrowserProvider(cachedProvider);
         const accounts = await web3Provider.listAccounts();
-        console.log('Accounts from provider:', accounts);
+        console.log('Accounts from provider during init:', accounts);
         if (accounts.length > 0) {
           const address = accounts[0].address.toLowerCase();
           const firebaseAccount = await fetchAccountFromFirebase(address);
@@ -86,96 +94,151 @@ export function Web3ModalProvider({ children }: { children: ReactNode }) {
             console.log('Setting account and provider from init:', firebaseAccount);
             setProvider(web3Provider);
             setAccount(firebaseAccount);
-            document.cookie = `account=${firebaseAccount}; path=/; max-age=86400`;
             if (window.localStorage) localStorage.setItem('account', firebaseAccount);
+          } else {
+            console.log('No Firebase account found, clearing state');
+            setAccount(null);
+            setProvider(null);
+            localStorage.removeItem('account');
           }
+        } else {
+          console.log('No accounts found during init');
+          setAccount(null);
+          setProvider(null);
+          localStorage.removeItem('account');
         }
+      } else {
+        console.log('No cached provider found');
       }
     } catch (error) {
       console.error('Failed to initialize wallet:', error);
+      setAccount(null);
+      setProvider(null);
+      localStorage.removeItem('account');
     } finally {
       setLoading(false);
       setIsInitialized(true);
-      console.log('Initialization complete - Account:', account, 'Loading:', loading);
+      console.log('Initialization complete - Account:', account, 'Loading:', false);
     }
   }, [fetchAccountFromFirebase, isInitialized]);
 
   const connectWallet = useCallback(
     async (refCode?: string): Promise<void> => {
-      try {
-        console.log('connectWallet started');
-        setLoading(true);
+      console.log('connectWallet started - Version: 2025-04-16');
+      setLoading(true);
+      console.log('Setting loading to true');
 
+      try {
         await modal.open();
         console.log('Modal opened, awaiting provider state...');
 
         const connectionPromise = new Promise<void>((resolve, reject) => {
-          const unsubscribe = modal.subscribeProvider(async (state) => {
-            console.log('Provider state update:', state);
-            if (state.provider && state.isConnected) {
+          let hasConnected = false;
+          const unsubscribeProvider = modal.subscribeProvider(async (state) => {
+            console.log('Provider state update:', {
+              provider: !!state.provider,
+              isConnected: state.isConnected,
+              address: state.address,
+              chainId: state.chainId,
+            });
+            if (state.provider && state.isConnected && !hasConnected) {
+              hasConnected = true;
               console.log('Provider connected, fetching signer...');
-              const web3Provider = new ethers.BrowserProvider(state.provider);
-              const signer = await web3Provider.getSigner();
-              const address = (await signer.getAddress()).toLowerCase();
-              console.log('Signer address:', address);
+              try {
+                const web3Provider = new ethers.BrowserProvider(state.provider);
+                const signer = await web3Provider.getSigner();
+                const address = (await signer.getAddress()).toLowerCase();
+                console.log('Signer address:', address);
 
-              const userRef = doc(db, 'users', address);
-              const userSnap = await getDoc(userRef);
-              if (!userSnap.exists()) {
-                await setDoc(userRef, {
-                  walletAddress: address,
-                  meowMiles: 0,
-                  proposalsGmeow: 0,
-                  gamesGmeow: 0,
-                  createdAt: new Date().toISOString(),
-                  lastCheckIn: null,
-                  referredBy: refCode || null,
-                  referrals: [],
-                });
-                console.log('New user saved to Firebase:', address);
+                const userRef = doc(db, 'users', address);
+                const userSnap = await getDoc(userRef);
+                if (!userSnap.exists()) {
+                  await setDoc(userRef, {
+                    walletAddress: address,
+                    meowMiles: 0,
+                    proposalsGmeow: 0,
+                    gamesGmeow: 0,
+                    createdAt: new Date().toISOString(),
+                    lastCheckIn: null,
+                    referredBy: refCode || null,
+                    referrals: [],
+                  });
+                  console.log('New user saved to Firebase:', address);
+                }
+
+                console.log('Setting account and provider from connect:', address);
+                setProvider(web3Provider);
+                setAccount(address);
+                if (window.localStorage) localStorage.setItem('account', address);
+
+                modal.close();
+                if (unsubscribeProvider) unsubscribeProvider();
+                if (unsubscribeState) unsubscribeState();
+                resolve();
+              } catch (error) {
+                console.error('Error during connection setup:', error);
+                reject(error);
               }
+            }
+          }) as (() => void) | undefined;
 
-              console.log('Setting account and provider from connect:', address);
-              setProvider(web3Provider);
-              setAccount(address);
-              document.cookie = `account=${address}; path=/; max-age=86400`;
-              if (window.localStorage) localStorage.setItem('account', address);
-
-              modal.close();
-              if (unsubscribe) unsubscribe();
-              resolve();
+          const unsubscribeState = modal.subscribeState((state) => {
+            console.log('Modal state:', {
+              open: state.open,
+              account,
+              hasConnected,
+            });
+            if (!state.open && !account && !hasConnected) {
+              setTimeout(() => {
+                if (!state.open && !account && !hasConnected) {
+                  console.log('Modal closed without connecting');
+                  if (unsubscribeProvider) unsubscribeProvider();
+                  if (unsubscribeState) unsubscribeState();
+                  reject(new Error('Modal closed without connecting wallet'));
+                }
+              }, 500);
             }
           }) as (() => void) | undefined;
 
           setTimeout(() => {
-            if (unsubscribe) unsubscribe();
-            console.log('Connection timed out after 60 seconds');
-            reject(new Error('Connection timed out'));
-          }, 60000);
+            if (unsubscribeProvider) unsubscribeProvider();
+            if (unsubscribeState) unsubscribeState();
+            console.log('Connection timed out after 20 seconds');
+            if (!hasConnected) {
+              reject(new Error('Connection timed out'));
+            }
+          }, 20000);
         });
 
         await connectionPromise;
-      } catch (error) {
+      } catch (error: any) {
         console.error('Wallet connection failed:', error);
         setAccount(null);
         setProvider(null);
         if (window.localStorage) localStorage.removeItem('account');
+        const errorMessage = error.message.includes('Modal closed')
+          ? 'Please connect wallet first'
+          : error.message.includes('timed out')
+          ? 'Connection timed out'
+          : 'Failed to connect wallet';
+        toast.error(errorMessage);
         throw error;
       } finally {
+        console.log('Resetting loading state');
         setLoading(false);
-        console.log('connectWallet finished - Account:', account, 'Loading:', loading);
+        console.log('connectWallet finished - Account:', account, 'Loading:', false);
       }
     },
-    []
+    [account]
   );
 
   const disconnectWallet = useCallback((): void => {
     console.log('Disconnecting wallet');
     setAccount(null);
     setProvider(null);
-    document.cookie = 'account=; path=/; max-age=0';
     if (window.localStorage) localStorage.removeItem('account');
     modal.close();
+    toast.success('Wallet disconnected');
   }, []);
 
   useEffect(() => {
@@ -191,7 +254,6 @@ export function Web3ModalProvider({ children }: { children: ReactNode }) {
           if (firebaseAccount && firebaseAccount !== account) {
             console.log('Setting account from handleAccountsChanged:', firebaseAccount);
             setAccount(firebaseAccount);
-            document.cookie = `account=${firebaseAccount}; path=/; max-age=86400`;
             if (window.localStorage) localStorage.setItem('account', firebaseAccount);
           }
         });
@@ -221,7 +283,7 @@ export function Web3ModalProvider({ children }: { children: ReactNode }) {
         cachedProvider.removeListener('accountsChanged', handleAccountsChanged);
       }
     };
-  }, [initializeConnection, disconnectWallet, fetchAccountFromFirebase]);
+  }, [initializeConnection, disconnectWallet, fetchAccountFromFirebase, account]);
 
   return (
     <Web3ModalContext.Provider value={{ account, provider, loading, connectWallet, disconnectWallet }}>

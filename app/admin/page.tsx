@@ -5,7 +5,7 @@ import { db } from '../lib/firebase';
 import { doc, setDoc, getDocs, collection, deleteDoc, query, orderBy, Timestamp } from 'firebase/firestore';
 import Sidebar from '../components/Sidebar';
 import Profile from '../components/Profile';
-import { useWeb3Modal } from '../lib/useWeb3Modal'; // Static import
+import { useWeb3Modal } from '../lib/Web3ModalContext'; // Static import
 import toast, { Toaster } from 'react-hot-toast';
 
 const ADMIN_WALLET = '0x6D54EF5Fa17d69717Ff96D2d868e040034F26024'.toLowerCase();

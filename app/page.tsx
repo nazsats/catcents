@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useWeb3Modal } from './lib/Web3ModalContext';
 import Image from 'next/image';
 import { gsap } from 'gsap';
+import toast, { Toaster } from 'react-hot-toast';
 
 export default function LandingPage() {
   const { account, connectWallet, loading } = useWeb3Modal();
@@ -14,34 +15,30 @@ export default function LandingPage() {
   const contentRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const navRef = useRef<HTMLElement>(null);
-
   const router = useRouter();
 
-  // Handle referral code and redirect
   useEffect(() => {
     const queryParams = new URLSearchParams(window.location.search);
     const ref = queryParams.get('ref');
     setRefCode(ref);
+    console.log('Ref code:', ref);
   }, []);
 
   useEffect(() => {
+    console.log('Checking redirect - Account:', account, 'Loading:', loading);
     if (account && !loading) {
+      console.log('Redirecting to /dashboard');
       router.replace('/dashboard');
     }
   }, [account, loading, router]);
 
-  // Animation setup with GSAP
   useEffect(() => {
-    if (loading || account) return;
+    if (account) {
+      console.log('Account exists, skipping animations');
+      return;
+    }
+    console.log('Running animations - Loading:', loading);
 
-    // Debug logs
-    console.log('Title ref:', titleRef.current);
-    console.log('Logo ref:', logoRef.current);
-    console.log('Content ref:', contentRef.current);
-    console.log('Button ref:', buttonRef.current);
-    console.log('Nav ref:', navRef.current);
-
-    // Manually split the title into characters
     const titleElement = titleRef.current;
     if (titleElement) {
       const titleText = 'CATCENTS';
@@ -53,10 +50,8 @@ export default function LandingPage() {
 
     const chars = titleElement?.querySelectorAll('.split-char');
 
-    // Animation timeline
     const tl = gsap.timeline({ delay: 0.5 });
 
-    // Animate title characters and logo together
     if (chars && chars.length && logoRef.current) {
       tl.from([chars, logoRef.current], {
         filter: 'blur(10px)',
@@ -67,7 +62,6 @@ export default function LandingPage() {
       });
     }
 
-    // Animate content
     if (contentRef.current) {
       tl.to(contentRef.current, {
         opacity: 1,
@@ -77,7 +71,6 @@ export default function LandingPage() {
       }, '-=0.5');
     }
 
-    // Animate button
     if (buttonRef.current) {
       tl.fromTo(
         buttonRef.current,
@@ -92,7 +85,6 @@ export default function LandingPage() {
       );
     }
 
-    // Animate nav
     if (navRef.current) {
       tl.from(navRef.current, {
         opacity: 0,
@@ -100,21 +92,35 @@ export default function LandingPage() {
         duration: 0.5,
       }, '-=0.8');
     }
-  }, [loading, account]);
+  }, [account]);
 
   const handleConnectWallet = async () => {
     try {
       setError(null);
+      console.log('Calling connectWallet with refCode:', refCode);
       await connectWallet(refCode ?? undefined);
-    } catch (err) {
-      setError('Failed to connect wallet. Please try again.');
+      console.log('connectWallet completed, account:', account);
+      if (account) {
+        console.log('Manual redirect after connect');
+        router.replace('/dashboard');
+      }
+    } catch (err: any) {
+      const errorMessage = err.message.includes('Modal closed')
+        ? 'Please connect wallet first'
+        : err.message.includes('timed out')
+        ? 'Connection timed out'
+        : 'Failed to connect wallet';
+      setError(errorMessage);
+      toast.error(errorMessage);
       console.error('Connect wallet error:', err);
     }
   };
 
+  console.log('Rendering page - Loading:', loading, 'Account:', account);
+
   return (
     <div className="relative min-h-screen overflow-hidden">
-      {/* Background Video - z-0 */}
+      <Toaster position="top-right" toastOptions={{ style: { background: '#1a1a1a', color: '#fff', border: '1px solid #9333ea' } }} />
       <video
         autoPlay
         loop
@@ -122,32 +128,19 @@ export default function LandingPage() {
         playsInline
         className="absolute top-0 left-0 w-full h-full object-cover z-0"
       >
-        <source
-          src="https://cdn.prod.website-files.com/67d2fd9186723a84c5f3b2e7%2F67d36f01e2b1e45d502df42f_Securitize_TriangleNoise-V28_2-transcode.mp4"
-          type="video/mp4"
-        />
+        <source src="/background-video.mp4" type="video/mp4" />
         Your browser does not support the video tag.
       </video>
 
-      {/* Overlay - z-10 */}
       <div className="absolute inset-0 bg-black/50 z-10"></div>
 
-      {/* Navbar - z-50 */}
       <nav
         ref={navRef}
         className="absolute top-0 left-0 right-0 z-50 flex justify-between items-center p-6 bg-transparent"
       >
-        {/* Left Side: Bigger Logo */}
         <div className="flex items-center">
-          <Image
-            src="/logo.png" // Navbar logo
-            alt="Catcents Logo"
-            width={80} // Increased size
-            height={80}
-          />
+          <Image src="/logo.png" alt="Catcents Logo" width={60} height={60} />
         </div>
-
-        {/* Right Side: Bigger X Icon and Join Discord Button */}
         <div className="flex items-center space-x-4">
           <a href="https://x.com/CatCentsio/" target="_blank" rel="noopener noreferrer">
             <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 23 23">
@@ -168,12 +161,9 @@ export default function LandingPage() {
         </div>
       </nav>
 
-      {/* Main Content - z-20 */}
       <div className="relative z-20 flex min-h-screen items-center justify-center p-6">
         <div className="text-center max-w-lg w-full">
-          {loading ? (
-            <div className="text-white animate-pulse">Loading...</div>
-          ) : account ? (
+          {account ? (
             <div className="space-y-6">
               <p className="text-xl text-white">Connected: {account.slice(0, 6)}...{account.slice(-4)}</p>
               <a
@@ -185,20 +175,21 @@ export default function LandingPage() {
             </div>
           ) : (
             <div className="space-y-8">
-              {/* Title and Logo */}
+              {loading ? (
+                <div className="flex items-center justify-center space-x-2 text-white mb-4">
+                  <svg className="animate-spin h-8 w-8 text-purple-400" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  </svg>
+                  <span>Connecting...</span>
+                </div>
+              ) : null}
               <div className="flex items-center justify-center space-x-4">
                 <h1 ref={titleRef} className="text-5xl md:text-6xl font-bold text-white"></h1>
                 <div ref={logoRef}>
-                  <Image
-                    src="/logo.png" // Main content logo
-                    alt="Catcents Logo"
-                    width={50}
-                    height={50}
-                  />
+                  <Image src="/logo.png" alt="Catcents Logo" width={60} height={60} />
                 </div>
               </div>
 
-              {/* Content */}
               <div ref={contentRef} className="space-y-6 opacity-0 translate-y-10">
                 <p className="text-xl text-gray-200">
                   The playground where clicks turn into culture. Come for the games, stay for the grind.
@@ -211,7 +202,6 @@ export default function LandingPage() {
                 )}
               </div>
 
-              {/* Button */}
               <div>
                 <button
                   ref={buttonRef}

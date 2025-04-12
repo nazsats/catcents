@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Sidebar from '../../components/Sidebar';
 import Profile from '../../components/Profile';
-import { useWeb3Modal } from '../../lib/useWeb3Modal'; // Static import
+import { useWeb3Modal } from '../../lib/Web3ModalContext'; // Static import
 
 export default function NFTStaking() {
   const { account, disconnectWallet, loading } = useWeb3Modal();
