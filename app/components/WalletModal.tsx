@@ -16,6 +16,7 @@ interface WalletInfo {
   connector: any;
   isInstalled: boolean;
   installUrl: string;
+  deepLink?: string; // Optional deep link for mobile
 }
 
 export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
@@ -47,6 +48,7 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
           }),
           isInstalled: typeof window !== 'undefined' && !!win.ethereum?.isMetaMask,
           installUrl: 'https://metamask.io/download/',
+          deepLink: 'metamask://', // Deep link for MetaMask mobile
         },
         {
           id: 'phantom',
@@ -125,20 +127,42 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
     detectWallets();
   }, []);
 
-  const handleConnect = async (walletId: string, connector: any) => {
-    setConnecting(walletId);
+  const handleConnect = async (wallet: WalletInfo) => {
+    setConnecting(wallet.id);
+
+    if (isMobile && !wallet.isInstalled) {
+      // On mobile, if wallet isn't detected, try deep link or guide user
+      if (wallet.deepLink) {
+        // Attempt deep link (e.g., for MetaMask)
+        window.location.href = wallet.deepLink;
+        toast(
+          `Opening ${wallet.name} app. If it doesn't open, please use ${wallet.name}'s in-app browser to connect.`,
+          { duration: 6000 }
+        );
+      } else {
+        // Guide user to open wallet app
+        toast(
+          `Please open your ${wallet.name} app and use its in-app browser to connect to this site.`,
+          { duration: 6000 }
+        );
+      }
+      setConnecting(null);
+      return;
+    }
+
+    // Attempt connection if wallet is detected or on desktop
     try {
-      await connect({ connector });
-      toast.success(`Connected to ${walletId}`);
+      await connect({ connector: wallet.connector });
+      toast.success(`Connected to ${wallet.name}`);
       onClose();
     } catch (error: any) {
-      console.error(`Failed to connect with ${walletId}:`, error);
+      console.error(`Failed to connect with ${wallet.id}:`, error);
       if (error.code === 4001) {
         toast.error('Connection rejected by user');
       } else {
         const message = isMobile
-          ? `Failed to connect to ${walletId}. Please open your ${walletId} app and try again.`
-          : `Failed to connect to ${walletId}: ${error.message}`;
+          ? `Failed to connect to ${wallet.name}. Please open your ${wallet.name} app's browser and try again.`
+          : `Failed to connect to ${wallet.id}: ${error.message}`;
         toast.error(message, { duration: 6000 });
       }
     } finally {
@@ -189,23 +213,24 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
         <h2 className="text-2xl md:text-3xl font-bold text-purple-300 mb-6 text-center">Connect Your Wallet</h2>
         {isMobile && (
           <p className="text-gray-300 text-sm text-center mb-4">
-            Select a wallet below. If you're not in a wallet app, open your wallet app to connect.
+            Select a wallet to connect. For the best experience, use your wallet's in-app browser.
           </p>
         )}
         <div className="space-y-3">
           {wallets.map((wallet) => (
             <div key={wallet.id} className="flex items-center">
               <button
-                onClick={() => handleConnect(wallet.id, wallet.connector)}
+                onClick={() => handleConnect(wallet)}
                 disabled={connecting === wallet.id}
                 className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all duration-200 ${
-                  preferredWallet === wallet.id
+                  preferredWallet === wallet.id && wallet.isInstalled
                     ? 'bg-gradient-to-r from-purple-600 to-cyan-500'
                     : 'bg-[#2d2d2d]'
                 } text-white hover:bg-gradient-to-r hover:from-purple-500 hover:to-cyan-400 disabled:opacity-50 hover:scale-105`}
               >
                 <span className="text-sm md:text-base font-semibold">
                   {connecting === wallet.id ? 'Connecting...' : wallet.name}
+                  {isMobile && !wallet.isInstalled && ' (Open App)'}
                 </span>
                 <img
                   src={wallet.icon}
