@@ -293,7 +293,7 @@ export default function Badges({ totalMeowMiles }: BadgesProps) {
 
   return (
     <div className="bg-black/90 rounded-xl p-6 border border-purple-900 shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 transition-shadow duration-300">
-      <style>{`
+      <style jsx>{`
         @keyframes glow-pulse {
           0% {
             box-shadow: 0 0 5px rgba(147, 51, 234, 0.5), 0 0 10px rgba(147, 51, 234, 0.3);

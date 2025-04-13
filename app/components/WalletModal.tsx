@@ -23,8 +23,14 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
   const [connecting, setConnecting] = useState<string | null>(null);
   const [wallets, setWallets] = useState<WalletInfo[]>([]);
   const [preferredWallet, setPreferredWallet] = useState<string | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
+    // Detect mobile device
+    const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
+    const mobileRegex = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i;
+    setIsMobile(mobileRegex.test(userAgent));
+
     const detectWallets = () => {
       const win = window as Window & { phantom?: { ethereum?: any }; backpack?: { ethereum?: any } };
       const walletList: WalletInfo[] = [
@@ -102,13 +108,17 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
 
       setWallets(walletList);
 
-      // Auto-detect preferred wallet (prioritize Phantom or Backpack)
+      // Auto-detect preferred wallet
       if (win.phantom?.ethereum) {
         setPreferredWallet('phantom');
       } else if (win.backpack?.ethereum || win.ethereum?.isBackpack) {
         setPreferredWallet('backpack');
       } else if (win.ethereum?.isMetaMask) {
         setPreferredWallet('metaMask');
+      } else if (win.ethereum?.isHahaWallet) {
+        setPreferredWallet('haha');
+      } else if (win.ethereum?.isRabby) {
+        setPreferredWallet('rabby');
       }
     };
 
@@ -126,7 +136,10 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
       if (error.code === 4001) {
         toast.error('Connection rejected by user');
       } else {
-        toast.error(`Failed to connect to ${walletId}: ${error.message}`);
+        const message = isMobile
+          ? `Failed to connect to ${walletId}. Please open your ${walletId} app and try again.`
+          : `Failed to connect to ${walletId}: ${error.message}`;
+        toast.error(message, { duration: 6000 });
       }
     } finally {
       setConnecting(null);
@@ -174,43 +187,33 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
           </svg>
         </button>
         <h2 className="text-2xl md:text-3xl font-bold text-purple-300 mb-6 text-center">Connect Your Wallet</h2>
+        {isMobile && (
+          <p className="text-gray-300 text-sm text-center mb-4">
+            Select a wallet below. If you're not in a wallet app, open your wallet app to connect.
+          </p>
+        )}
         <div className="space-y-3">
           {wallets.map((wallet) => (
             <div key={wallet.id} className="flex items-center">
-              {wallet.isInstalled ? (
-                <button
-                  onClick={() => handleConnect(wallet.id, wallet.connector)}
-                  disabled={connecting === wallet.id}
-                  className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all duration-200 ${
-                    preferredWallet === wallet.id
-                      ? 'bg-gradient-to-r from-purple-600 to-cyan-500'
-                      : 'bg-[#2d2d2d]'
-                  } text-white hover:bg-gradient-to-r hover:from-purple-500 hover:to-cyan-400 disabled:opacity-50 hover:scale-105`}
-                >
-                  <span className="text-sm md:text-base font-semibold">
-                    {connecting === wallet.id ? 'Connecting...' : wallet.name}
-                  </span>
-                  <img
-                    src={wallet.icon}
-                    alt={wallet.name}
-                    className="w-8 h-8 rounded-full object-cover"
-                    onError={(e) => (e.currentTarget.src = '/wallets/fallback.jpg')}
-                  />
-                </button>
-              ) : (
-                <div className="w-full flex items-center justify-between bg-[#2d2d2d] text-gray-400 px-4 py-3 rounded-lg opacity-60">
-                  <span className="text-sm md:text-base">{wallet.name} (Not Installed)</span>
-                  <a
-                    href={wallet.installUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-cyan-400 hover:text-cyan-300 text-sm hover:underline"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    Install
-                  </a>
-                </div>
-              )}
+              <button
+                onClick={() => handleConnect(wallet.id, wallet.connector)}
+                disabled={connecting === wallet.id}
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all duration-200 ${
+                  preferredWallet === wallet.id
+                    ? 'bg-gradient-to-r from-purple-600 to-cyan-500'
+                    : 'bg-[#2d2d2d]'
+                } text-white hover:bg-gradient-to-r hover:from-purple-500 hover:to-cyan-400 disabled:opacity-50 hover:scale-105`}
+              >
+                <span className="text-sm md:text-base font-semibold">
+                  {connecting === wallet.id ? 'Connecting...' : wallet.name}
+                </span>
+                <img
+                  src={wallet.icon}
+                  alt={wallet.name}
+                  className="w-8 h-8 rounded-full object-cover"
+                  onError={(e) => (e.currentTarget.src = '/wallets/fallback.jpg')}
+                />
+              </button>
             </div>
           ))}
         </div>
