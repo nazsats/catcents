@@ -100,17 +100,13 @@ export default function LandingPage() {
   return (
     <div className="relative min-h-screen overflow-hidden">
       <Toaster position="top-right" toastOptions={{ style: { background: '#1a1a1a', color: '#fff', border: '1px solid #9333ea' } }} />
-      <video
-        autoPlay
-        loop
-        muted
-        playsInline
+      <Image
+        src="/landing.jpg"
+        alt="Landing Background"
+        fill
         className="absolute top-0 left-0 w-full h-full object-cover z-0"
-      >
-        <source src="/background-video.mp4" type="video/mp4" />
-        Your browser does not support the video tag.
-      </video>
-
+        priority
+      />
       <div className="absolute inset-0 bg-black/50 z-10"></div>
 
       <nav
