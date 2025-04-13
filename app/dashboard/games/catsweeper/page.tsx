@@ -11,7 +11,7 @@ import toast, { Toaster } from 'react-hot-toast';
 
 const GRID_SIZE = 10;
 const TOTAL_CELLS = GRID_SIZE * GRID_SIZE;
-const TOTAL_MINES = 20;
+const TOTAL_MINES = 8;
 const INITIAL_BET = 0.01; // 0.01 MON
 
 const contractAddress = '0x27DF24e9Ed3F256FE4Eea32311848F5a978Ab96e';
