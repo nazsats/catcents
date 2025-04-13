@@ -30,7 +30,6 @@ export default function Badges({ totalMeowMiles }: BadgesProps) {
   const [earnedBadges, setEarnedBadges] = useState<Badge[]>([]);
   const [claimedBadges, setClaimedBadges] = useState<number[]>([]);
   const [isClaiming, setIsClaiming] = useState<{ [key: number]: boolean }>({});
-  const [isMobile, setIsMobile] = useState(false);
   const queryClient = useQueryClient();
 
   const badgeMilestones: Badge[] = [
@@ -44,13 +43,6 @@ export default function Badges({ totalMeowMiles }: BadgesProps) {
     { milestone: 500000, name: 'Mythic Pouncer', icon: '/badges/mythic.png' },
     { milestone: 10000000, name: 'Catcents Legend', icon: '/badges/catcentslegend.png' },
   ];
-
-  // Detect mobile device
-  useEffect(() => {
-    const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
-    const mobileRegex = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i;
-    setIsMobile(mobileRegex.test(userAgent));
-  }, []);
 
   // Convert Wagmi provider to Ethers.js provider
   const getEthersProvider = async () => {
@@ -279,21 +271,9 @@ export default function Badges({ totalMeowMiles }: BadgesProps) {
     }
   };
 
-  // Check for no wallet or mobile browser
-  if (!wagmiProvider || isMobile) {
-    return (
-      <div className="bg-black/90 rounded-xl p-6 border border-purple-900 shadow-lg shadow-purple-500/30 text-center">
-        <h4 className="text-lg md:text-xl font-semibold text-purple-400 mb-4">Badges Unavailable</h4>
-        <p className="text-gray-300 text-sm md:text-base">
-          For the best experience, please use a desktop browser with a wallet installed (e.g., MetaMask, Phantom, or Backpack) or a wallet dApp.
-        </p>
-      </div>
-    );
-  }
-
   return (
     <div className="bg-black/90 rounded-xl p-6 border border-purple-900 shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 transition-shadow duration-300">
-      <style jsx>{`
+      <style>{`
         @keyframes glow-pulse {
           0% {
             box-shadow: 0 0 5px rgba(147, 51, 234, 0.5), 0 0 10px rgba(147, 51, 234, 0.3);
