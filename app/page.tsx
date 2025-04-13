@@ -5,15 +5,16 @@ import { useWeb3Modal } from './lib/Web3ModalContext';
 import Image from 'next/image';
 import { gsap } from 'gsap';
 import toast, { Toaster } from 'react-hot-toast';
+import WalletModal from './components/WalletModal';
 
 export default function LandingPage() {
-  const { account, connectWallet, loading } = useWeb3Modal();
+  const { account, loading } = useWeb3Modal();
   const [refCode, setRefCode] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const logoRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const buttonRef = useRef<HTMLButtonElement>(null);
+  const buttonRef = useRef<HTMLDivElement>(null);
   const navRef = useRef<HTMLElement>(null);
   const router = useRouter();
 
@@ -33,8 +34,8 @@ export default function LandingPage() {
   }, [account, loading, router]);
 
   useEffect(() => {
-    if (account) {
-      console.log('Account exists, skipping animations');
+    if (account || loading) {
+      console.log('Account exists or loading, skipping animations');
       return;
     }
     console.log('Running animations - Loading:', loading);
@@ -92,29 +93,7 @@ export default function LandingPage() {
         duration: 0.5,
       }, '-=0.8');
     }
-  }, [account]);
-
-  const handleConnectWallet = async () => {
-    try {
-      setError(null);
-      console.log('Calling connectWallet with refCode:', refCode);
-      await connectWallet(refCode ?? undefined);
-      console.log('connectWallet completed, account:', account);
-      if (account) {
-        console.log('Manual redirect after connect');
-        router.replace('/dashboard');
-      }
-    } catch (err: any) {
-      const errorMessage = err.message.includes('Modal closed')
-        ? 'Please connect wallet first'
-        : err.message.includes('timed out')
-        ? 'Connection timed out'
-        : 'Failed to connect wallet';
-      setError(errorMessage);
-      toast.error(errorMessage);
-      console.error('Connect wallet error:', err);
-    }
-  };
+  }, [account, loading]);
 
   console.log('Rendering page - Loading:', loading, 'Account:', account);
 
@@ -139,7 +118,14 @@ export default function LandingPage() {
         className="absolute top-0 left-0 right-0 z-50 flex justify-between items-center p-6 bg-transparent"
       >
         <div className="flex items-center">
-          <Image src="/logo.png" alt="Catcents Logo" width={60} height={60} />
+          <Image
+            src="/logo.png"
+            alt="Catcents Logo"
+            width={60}
+            height={60}
+            priority
+            style={{ width: 'auto', height: 'auto' }}
+          />
         </div>
         <div className="flex items-center space-x-4">
           <a href="https://x.com/CatCentsio/" target="_blank" rel="noopener noreferrer">
@@ -166,12 +152,12 @@ export default function LandingPage() {
           {account ? (
             <div className="space-y-6">
               <p className="text-xl text-white">Connected: {account.slice(0, 6)}...{account.slice(-4)}</p>
-              <a
-                href="/dashboard"
+              <button
+                onClick={() => router.push('/dashboard')}
                 className="inline-flex items-center bg-purple-600 px-8 py-4 rounded-full text-lg font-semibold text-white hover:bg-purple-700 transition-all"
               >
                 Go to Dashboard
-              </a>
+              </button>
             </div>
           ) : (
             <div className="space-y-8">
@@ -186,7 +172,14 @@ export default function LandingPage() {
               <div className="flex items-center justify-center space-x-4">
                 <h1 ref={titleRef} className="text-5xl md:text-6xl font-bold text-white"></h1>
                 <div ref={logoRef}>
-                  <Image src="/logo.png" alt="Catcents Logo" width={60} height={60} />
+                  <Image
+                    src="/logo.png"
+                    alt="Catcents Logo"
+                    width={60}
+                    height={60}
+                    priority
+                    style={{ width: 'auto', height: 'auto' }}
+                  />
                 </div>
               </div>
 
@@ -197,15 +190,11 @@ export default function LandingPage() {
                 {refCode && (
                   <p className="text-sm text-gray-400">Referred by: {refCode.slice(0, 6)}...</p>
                 )}
-                {error && (
-                  <p className="text-red-400 bg-red-900/20 p-2 rounded">{error}</p>
-                )}
               </div>
 
-              <div>
+              <div ref={buttonRef}>
                 <button
-                  ref={buttonRef}
-                  onClick={handleConnectWallet}
+                  onClick={() => setIsWalletModalOpen(true)}
                   disabled={loading}
                   className="inline-flex items-center bg-purple-600 px-8 py-4 rounded-full text-lg font-semibold text-white hover:bg-purple-700 transition-all disabled:opacity-50"
                 >
@@ -224,6 +213,12 @@ export default function LandingPage() {
           )}
         </div>
       </div>
+
+      {/* Custom Wallet Modal */}
+      <WalletModal
+        isOpen={isWalletModalOpen}
+        onClose={() => setIsWalletModalOpen(false)}
+      />
     </div>
   );
 }

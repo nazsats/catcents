@@ -35,3 +35,8 @@ img {
 nav {
   opacity: 1 !important; /* Ensure navbar is visible initially */
 }
+
+.w3m-social-login-container,
+.w3m-social-login {
+  display: none !important;
+}

@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { ethers } from 'ethers'; // ethers v6
 import { db } from '../lib/firebase';
 import { doc, getDoc, setDoc, increment } from 'firebase/firestore';
 import Sidebar from '../components/Sidebar';
@@ -8,59 +9,102 @@ import Profile from '../components/Profile';
 import Badges from '../components/Badges';
 import { useWeb3Modal } from '../lib/Web3ModalContext';
 import toast, { Toaster } from 'react-hot-toast';
-import { ethers } from 'ethers';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import Skeleton from 'react-loading-skeleton';
+import 'react-loading-skeleton/dist/skeleton.css';
 
 export default function DashboardPage() {
-  const { account, provider, disconnectWallet, loading } = useWeb3Modal();
+  const { account, provider: wagmiProvider, disconnectWallet, loading, selectedWallet } = useWeb3Modal();
   const [meowMiles, setMeowMiles] = useState({ quests: 0, proposals: 0, games: 0, referrals: 0, total: 0 });
   const [monBalance, setMonBalance] = useState<string>('0');
   const [lastCheckIn, setLastCheckIn] = useState<number | null>(null);
   const [countdown, setCountdown] = useState<string>('24:00:00');
   const [checkingIn, setCheckingIn] = useState(false);
   const [referralsList, setReferralsList] = useState<string[]>([]);
+  const [providerReady, setProviderReady] = useState(false);
   const router = useRouter();
+  const queryClient = useQueryClient();
 
-  const fetchUserData = async (address: string) => {
-    console.log('fetchUserData called with address:', address);
+  const MONAD_TESTNET_CHAIN_ID = '0x279f'; // Hex for 10143
+  const CHECK_IN_ADDRESS = '0xfF8b7625894441C26fEd460dD21360500BF4E767'; // Target address for 0 MON transfer
+
+  // Convert Wagmi provider to Ethers.js provider (ethers v6)
+  const getEthersProvider = async () => {
+    if (!wagmiProvider) {
+      console.error('Wagmi provider not available');
+      return null;
+    }
     try {
-      const userRef = doc(db, 'users', address);
-      const userSnap = await getDoc(userRef);
-      console.log('Firebase snapshot exists:', userSnap.exists());
-      if (userSnap.exists()) {
-        const data = userSnap.data();
-        console.log('Firebase data:', data);
-        const quests = Math.floor(data.meowMiles || 0);
-        const proposals = Math.floor(data.proposalsGmeow || 0);
-        const games = Math.floor(data.gamesGmeow || 0);
-        const referrals = Math.floor(data.referrals?.length || 0);
-        const newMeowMiles = {
-          quests,
-          proposals,
-          games,
-          referrals,
-          total: quests + proposals + games + referrals,
-        };
-        console.log('Setting meowMiles:', newMeowMiles);
-        setMeowMiles(newMeowMiles);
-        setLastCheckIn(data.lastCheckIn || null);
-        setReferralsList(data.referrals || []);
-        if (data.lastCheckIn) startCountdown(data.lastCheckIn);
+      let provider;
+      const win = window as Window & { phantom?: { ethereum?: any }; backpack?: { ethereum?: any } };
+      if (selectedWallet === 'phantom' && win.phantom?.ethereum) {
+        provider = win.phantom.ethereum;
+      } else if (selectedWallet === 'backpack' && (win.backpack?.ethereum || wagmiProvider.isBackpack)) {
+        provider = win.backpack?.ethereum || wagmiProvider;
+      } else if (selectedWallet === 'metaMask' && wagmiProvider.isMetaMask) {
+        provider = wagmiProvider;
       } else {
-        console.log('No data found in Firebase for address:', address);
+        provider = wagmiProvider; // Fallback
       }
+      return new ethers.BrowserProvider(provider);
     } catch (error) {
-      console.error('Failed to fetch user data:', error);
-      toast.error('Failed to load user data');
+      console.error('Failed to create Ethers.js provider:', error);
+      return null;
     }
   };
 
+  // Fetch user data with React Query
+  const fetchUserData = async (address: string) => {
+    console.log('fetchUserData called with address:', address);
+    const userRef = doc(db, 'users', address);
+    const userSnap = await getDoc(userRef);
+    if (userSnap.exists()) {
+      const data = userSnap.data();
+      console.log('Firebase data:', data);
+      return {
+        quests: Math.floor(data.meowMiles || 0),
+        proposals: Math.floor(data.proposalsGmeow || 0),
+        games: Math.floor(data.gamesGmeow || 0),
+        referrals: Math.floor(data.referrals?.length || 0),
+        total: Math.floor((data.meowMiles || 0) + (data.proposalsGmeow || 0) + (data.gamesGmeow || 0) + (data.referrals?.length || 0)),
+        lastCheckIn: data.lastCheckIn || null,
+        referralsList: data.referrals || [],
+      };
+    }
+    return null;
+  };
+
+  const { data: userData, isLoading: userDataLoading } = useQuery({
+    queryKey: ['userData', account],
+    queryFn: () => fetchUserData(account!),
+    enabled: !!account,
+  });
+
+  useEffect(() => {
+    if (userData) {
+      setMeowMiles({
+        quests: userData.quests,
+        proposals: userData.proposals,
+        games: userData.games,
+        referrals: userData.referrals,
+        total: userData.total,
+      });
+      setLastCheckIn(userData.lastCheckIn);
+      setReferralsList(userData.referralsList);
+      if (userData.lastCheckIn) startCountdown(userData.lastCheckIn);
+    }
+  }, [userData]);
+
+  // Fetch MON balance
   const fetchMonBalance = async (address: string) => {
     console.log('fetchMonBalance called with address:', address);
     try {
-      if (!provider) {
-        throw new Error('Provider not available');
+      const ethersProvider = await getEthersProvider();
+      if (!ethersProvider) {
+        throw new Error('Ethers.js provider not available');
       }
-      const balance = await provider.getBalance(address);
+      const balance = await ethersProvider.getBalance(address);
+      console.log('Raw MON balance:', balance.toString());
       setMonBalance(ethers.formatEther(balance).slice(0, 6));
     } catch (error) {
       console.error('Failed to fetch MON balance:', error);
@@ -69,36 +113,116 @@ export default function DashboardPage() {
     }
   };
 
+  // Handle daily check-in
   const handleDailyCheckIn = async () => {
-    if (!account || !provider || checkingIn) return;
+    if (!account || !wagmiProvider || checkingIn) {
+      toast.error('Please ensure a wallet is connected and ready.');
+      return;
+    }
     const now = Date.now();
     const oneDay = 24 * 60 * 60 * 1000;
-    if (lastCheckIn && now - lastCheckIn < oneDay) return;
+    if (lastCheckIn && now - lastCheckIn < oneDay) {
+      toast.error('Check-in not available yet.');
+      return;
+    }
 
     setCheckingIn(true);
+    const pendingToast = toast.loading('Processing check-in...');
     try {
-      const signer = await provider.getSigner();
+      const ethersProvider = await getEthersProvider();
+      if (!ethersProvider) {
+        throw new Error('Ethers.js provider not available');
+      }
+
+      // Check current network
+      const network = await ethersProvider.getNetwork();
+      console.log('Current network chain ID:', network.chainId.toString());
+
+      // Only switch if not on Monad Testnet
+      if (network.chainId.toString() !== '10143') {
+        console.log('Switching to Monad Testnet...');
+        try {
+          await wagmiProvider.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: MONAD_TESTNET_CHAIN_ID }],
+          });
+        } catch (switchError: any) {
+          if (switchError.code === 4902) {
+            console.log('Adding Monad Testnet to wallet...');
+            await wagmiProvider.request({
+              method: 'wallet_addEthereumChain',
+              params: [
+                {
+                  chainId: MONAD_TESTNET_CHAIN_ID,
+                  chainName: 'Monad Testnet',
+                  rpcUrls: ['https://testnet-rpc.monad.xyz'],
+                  nativeCurrency: {
+                    name: 'MON',
+                    symbol: 'MON',
+                    decimals: 18,
+                  },
+                  blockExplorerUrls: ['https://testnet.monadscan.com'],
+                },
+              ],
+            });
+          } else {
+            throw new Error('Failed to switch to Monad Testnet. Please switch networks manually in your wallet.');
+          }
+        }
+      }
+
+      // Verify network after potential switch
+      const updatedNetwork = await ethersProvider.getNetwork();
+      if (updatedNetwork.chainId.toString() !== '10143') {
+        throw new Error('Network verification failed. Please ensure you are on Monad Testnet.');
+      }
+
+      const signer = await ethersProvider.getSigner();
+      console.log('Signer address:', await signer.getAddress());
+
+      // Validate check-in address
+      console.log('Check-in address:', CHECK_IN_ADDRESS);
+      console.log('Check-in address length:', CHECK_IN_ADDRESS.length);
+      if (CHECK_IN_ADDRESS.length !== 42 || !/^0x[0-9a-fA-F]{40}$/.test(CHECK_IN_ADDRESS)) {
+        throw new Error('Invalid check-in address');
+      }
+
+      // Check balance
+      const balance = await ethersProvider.getBalance(account);
+      console.log('Account balance:', ethers.formatEther(balance));
+      if (balance === BigInt(0)) {
+        throw new Error('Insufficient MON balance. Please claim testnet tokens from the Monad faucet.');
+      }
+
+      // Estimate gas
+      const gasLimit = 21000; // Simple transfer
+      console.log('Gas limit:', gasLimit);
+
+      // Send 0 MON transaction
       const tx = await signer.sendTransaction({
-        to: '0xfF8b7625894441C26fEd460dD21360500BF4E767',
-        value: ethers.parseEther('0'),
+        to: CHECK_IN_ADDRESS,
+        value: 0,
+        gasLimit,
       });
 
-      const pendingToast = toast.loading('Processing check-in...');
+      console.log('Transaction sent:', tx.hash);
       const receipt = await tx.wait();
       if (!receipt) throw new Error('Transaction receipt not received');
       const txHash = receipt.hash;
+      console.log('Transaction confirmed:', txHash);
 
+      // Update Firebase
       const userRef = doc(db, 'users', account);
       await setDoc(userRef, { lastCheckIn: now, meowMiles: increment(10) }, { merge: true });
 
       setLastCheckIn(now);
       startCountdown(now);
-      await fetchUserData(account);
+      queryClient.invalidateQueries({ queryKey: ['userData', account] });
 
       toast.dismiss(pendingToast);
       toast.success(
         <div>
-          Check-in completed!{' '}
+          Check-in completed! You earned 10 MeowMiles.{' '}
           <a
             href={`https://testnet.monadscan.com/tx/${txHash}`}
             target="_blank"
@@ -110,14 +234,48 @@ export default function DashboardPage() {
         </div>,
         { duration: 5000 }
       );
-    } catch (error) {
+    } catch (error: any) {
       console.error('Daily check-in failed:', error);
-      toast.error('Failed to check-in: ' + (error as Error).message);
+      toast.dismiss(pendingToast);
+      if (error.message.includes('insufficient funds') || error.message.includes('Insufficient MON balance')) {
+        toast.error(
+          <div>
+            Insufficient MON balance.{' '}
+            <a
+              href="https://testnet.monad.xyz/faucet"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline text-cyan-400 hover:text-cyan-300"
+            >
+              Claim MON tokens
+            </a>
+          </div>,
+          { duration: 5000 }
+        );
+      } else if (error.message.includes('Failed to switch to Monad Testnet')) {
+        toast.error(
+          <div>
+            {error.message}{' '}
+            <button
+              onClick={() => !checkingIn && handleDailyCheckIn()}
+              className="underline text-cyan-400 hover:text-cyan-300"
+            >
+              Retry
+            </button>
+          </div>,
+          { duration: 10000 }
+        );
+      } else if (error.code === 'CALL_EXCEPTION' || error.message.includes('revert')) {
+        toast.error('Transaction failed. Please try again.', { duration: 5000 });
+      } else {
+        toast.error('Failed to check-in: ' + error.message, { duration: 5000 });
+      }
     } finally {
       setCheckingIn(false);
     }
   };
 
+  // Countdown logic
   const startCountdown = (lastCheckInTime: number) => {
     const updateTimer = () => {
       const now = Date.now();
@@ -162,19 +320,47 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    console.log('Dashboard - useEffect - Account:', account, 'Provider:', provider, 'Loading:', loading);
-    if (loading) return;
-    if (!account) {
-      console.log('No account, redirecting to /');
-      router.replace('/');
+    console.log('Dashboard - useEffect - Account:', account, 'Provider:', wagmiProvider, 'Loading:', loading, 'Selected Wallet:', selectedWallet);
+    if (loading || !account) {
+      if (!account && !loading) {
+        console.log('No account, redirecting to /');
+        router.replace('/');
+      }
       return;
     }
-    console.log('Fetching data for account:', account);
-    fetchUserData(account);
-    fetchMonBalance(account);
-  }, [account, provider, loading, router]);
 
-  if (loading) return <div className="flex min-h-screen items-center justify-center bg-black text-white animate-pulse">Loading...</div>;
+    if (!wagmiProvider) {
+      console.log('Provider not yet available, waiting...');
+      const interval = setInterval(() => {
+        if (wagmiProvider) {
+          console.log('Provider now available:', wagmiProvider);
+          setProviderReady(true);
+          clearInterval(interval);
+        }
+      }, 500);
+      return () => clearInterval(interval);
+    }
+
+    setProviderReady(true);
+    if (account) {
+      fetchMonBalance(account);
+    }
+  }, [account, wagmiProvider, loading, router]);
+
+  if (userDataLoading || loading || !providerReady) {
+    return (
+      <div className="flex min-h-screen bg-gradient-to-br from-black to-purple-950 text-white">
+        <Sidebar onDisconnect={disconnectWallet} />
+        <main className="flex-1 p-4 md:p-8 overflow-auto">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <Skeleton height={200} className="rounded-xl" />
+            <Skeleton height={200} className="rounded-xl" />
+            <Skeleton height={200} className="rounded-xl" />
+          </div>
+        </main>
+      </div>
+    );
+  }
   if (!account) return null;
 
   return (

@@ -23,9 +23,10 @@ const contractABI = [
 ];
 
 const catEmojis = ['😺', '🐱', '🐾', '🐈', '😻', '🙀', '🐯', '🦁', '🐰', '🐾'];
+const MONAD_TESTNET_CHAIN_ID = '0x279f'; // Hex for 10143
 
 export default function Minesweeper() {
-  const { account, disconnectWallet, loading, provider } = useWeb3Modal();
+  const { account, disconnectWallet, loading, provider: wagmiProvider, selectedWallet } = useWeb3Modal();
   const [grid, setGrid] = useState<any[]>([]);
   const [gameOver, setGameOver] = useState(false);
   const [gameStarted, setGameStarted] = useState(false);
@@ -35,6 +36,31 @@ export default function Minesweeper() {
   const [isBetting, setIsBetting] = useState(false);
   const router = useRouter();
   const [hasRedirected, setHasRedirected] = useState(false);
+
+  // Convert Wagmi provider to Ethers.js provider
+  const getEthersProvider = async () => {
+    if (!wagmiProvider) {
+      console.error('Wagmi provider not available');
+      return null;
+    }
+    try {
+      let provider;
+      const win = window as Window & { phantom?: { ethereum?: any }; backpack?: { ethereum?: any } };
+      if (selectedWallet === 'phantom' && win.phantom?.ethereum) {
+        provider = win.phantom.ethereum;
+      } else if (selectedWallet === 'backpack' && (win.backpack?.ethereum || wagmiProvider.isBackpack)) {
+        provider = win.backpack?.ethereum || wagmiProvider;
+      } else if (selectedWallet === 'metaMask' && wagmiProvider.isMetaMask) {
+        provider = wagmiProvider;
+      } else {
+        provider = wagmiProvider;
+      }
+      return new ethers.BrowserProvider(provider);
+    } catch (error) {
+      console.error('Failed to create Ethers.js provider:', error);
+      return null;
+    }
+  };
 
   const initializeGrid = () => {
     const newGrid = Array.from({ length: GRID_SIZE }, () =>
@@ -104,34 +130,165 @@ export default function Minesweeper() {
   }, [account, loading, router, hasRedirected]);
 
   const placeBet = async () => {
-    if (!provider) {
-      toast.error('Wallet provider not detected');
+    if (!account || !wagmiProvider) {
+      toast.error('Please connect your wallet');
       return;
     }
 
     setIsBetting(true);
+    const pendingToast = toast.loading('Placing bet...');
+
     try {
-      const signer = await provider.getSigner();
+      const ethersProvider = await getEthersProvider();
+      if (!ethersProvider) {
+        throw new Error('Ethers.js provider not available');
+      }
+
+      // Check network
+      const network = await ethersProvider.getNetwork();
+      console.log('Current network chain ID:', network.chainId.toString());
+
+      if (network.chainId.toString() !== '10143') {
+        console.log('Switching to Monad Testnet...');
+        try {
+          await wagmiProvider.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: MONAD_TESTNET_CHAIN_ID }],
+          });
+        } catch (switchError: any) {
+          if (switchError.code === 4902) {
+            console.log('Adding Monad Testnet to wallet...');
+            await wagmiProvider.request({
+              method: 'wallet_addEthereumChain',
+              params: [
+                {
+                  chainId: MONAD_TESTNET_CHAIN_ID,
+                  chainName: 'Monad Testnet',
+                  rpcUrls: ['https://testnet-rpc.monad.xyz'],
+                  nativeCurrency: { name: 'MON', symbol: 'MON', decimals: 18 },
+                  blockExplorerUrls: ['https://testnet.monadscan.com'],
+                },
+              ],
+            });
+          } else {
+            throw new Error('Failed to switch to Monad Testnet. Please switch networks manually.');
+          }
+        }
+      }
+
+      const updatedNetwork = await ethersProvider.getNetwork();
+      if (updatedNetwork.chainId.toString() !== '10143') {
+        throw new Error('Network verification failed. Please ensure you are on Monad Testnet.');
+      }
+
+      const signer = await ethersProvider.getSigner();
+      console.log('Signer address:', await signer.getAddress());
+
+      // Validate contract address
+      console.log('Contract address:', contractAddress);
+      if (contractAddress.length !== 42 || !/^0x[0-9a-fA-F]{40}$/.test(contractAddress)) {
+        throw new Error('Invalid contract address');
+      }
+
+      // Check balance
+      const balance = await ethersProvider.getBalance(account);
+      console.log('Account balance:', ethers.formatEther(balance));
+      const betAmount = ethers.parseEther(INITIAL_BET.toString());
+      if (balance < betAmount) {
+        throw new Error('Insufficient MON balance. Please claim testnet tokens from the Monad faucet.');
+      }
+
       const contract = new ethers.Contract(contractAddress, contractABI, signer);
 
-      const tx = await contract.placeBet({ value: ethers.parseEther(INITIAL_BET.toString()) });
-      const pendingToast = toast.loading('Placing bet...');
+      // Simulate transaction
+      const iface = new ethers.Interface(contractABI);
+      const data = iface.encodeFunctionData('placeBet', []);
+      console.log('Encoded transaction data:', data);
+
+      try {
+        await ethersProvider.call({
+          to: contractAddress,
+          data,
+          from: account,
+          value: betAmount,
+        });
+        console.log('Simulation successful');
+      } catch (simError: any) {
+        console.error('Simulation failed:', simError);
+        throw new Error(`Transaction will fail: ${simError.reason || simError.message || 'Unknown reason'}`);
+      }
+
+      // Send transaction
+      const gasLimit = 100000;
+      console.log('Gas limit:', gasLimit);
+
+      const tx = await contract.placeBet({ value: betAmount, gasLimit });
+      console.log('Transaction sent:', tx.hash);
+
       const receipt = await tx.wait();
+      if (!receipt || receipt.status === 0) {
+        throw new Error('Transaction failed or no receipt received');
+      }
+      const txHash = receipt.hash;
+      console.log('Transaction confirmed:', txHash);
+
       toast.dismiss(pendingToast);
       toast.success(
         <div>
-          Bet placed! Game started!{' '}
-          <a href={`https://testnet.monadexplorer.com/tx/${receipt.hash}`} target="_blank" rel="noopener noreferrer" className="underline text-cyan-400">
-            View on Explorer
+          Bet placed successfully! Game started!{' '}
+          <a
+            href={`https://testnet.monadscan.com/tx/${txHash}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline text-cyan-400"
+          >
+            View on MonadScan
           </a>
-        </div>
+        </div>,
+        { duration: 5000 }
       );
 
       setGameStarted(true);
       setIsBetting(false);
     } catch (error: any) {
       console.error('Failed to place bet:', error);
-      toast.error('Failed to place bet: ' + error.message);
+      toast.dismiss(pendingToast);
+      if (error.message.includes('insufficient funds') || error.message.includes('Insufficient MON balance')) {
+        toast.error(
+          <div>
+            Insufficient MON balance.{' '}
+            <a
+              href="https://testnet.monad.xyz/faucet"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline text-cyan-400"
+            >
+              Claim MON tokens
+            </a>
+          </div>,
+          { duration: 5000 }
+        );
+      } else if (error.message.includes('Failed to switch to Monad Testnet')) {
+        toast.error(
+          <div>
+            {error.message}{' '}
+            <button
+              onClick={() => placeBet()}
+              className="underline text-cyan-400 hover:text-cyan-300"
+            >
+              Retry
+            </button>
+          </div>,
+          { duration: 10000 }
+        );
+      } else if (error.code === 'CALL_EXCEPTION' || error.message.includes('revert')) {
+        toast.error(
+          `Bet failed: ${error.reason || 'Transaction reverted. Please try again.'}`,
+          { duration: 5000 }
+        );
+      } else {
+        toast.error('Failed to place bet: ' + error.message, { duration: 5000 });
+      }
       setIsBetting(false);
     }
   };
@@ -210,13 +367,18 @@ export default function Minesweeper() {
   };
 
   const withdrawFunds = async () => {
-    if (!account || account.toLowerCase() !== '0x6D54EF5Fa17d69717Ff96D2d868e040034F26024'.toLowerCase() || !provider) {
+    if (!account || account.toLowerCase() !== '0x6D54EF5Fa17d69717Ff96D2d868e040034F26024'.toLowerCase() || !wagmiProvider) {
       toast.error('Only admin can withdraw funds');
       return;
     }
 
     try {
-      const signer = await provider.getSigner();
+      const ethersProvider = await getEthersProvider();
+      if (!ethersProvider) {
+        throw new Error('Ethers.js provider not available');
+      }
+
+      const signer = await ethersProvider.getSigner();
       const contract = new ethers.Contract(contractAddress, contractABI, signer);
 
       const tx = await contract.withdrawFunds();
@@ -226,30 +388,41 @@ export default function Minesweeper() {
       toast.success(
         <div>
           Funds withdrawn!{' '}
-          <a href={`https://testnet.monadexplorer.com/tx/${receipt.hash}`} target="_blank" rel="noopener noreferrer" className="underline text-cyan-400">
-            View on Explorer
+          <a
+            href={`https://testnet.monadscan.com/tx/${receipt.hash}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline text-cyan-400"
+          >
+            View on MonadScan
           </a>
-        </div>
+        </div>,
+        { duration: 5000 }
       );
     } catch (error: any) {
       console.error('Failed to withdraw funds:', error);
-      toast.error('Failed to withdraw: ' + error.message);
+      toast.error('Failed to withdraw: ' + error.message, { duration: 5000 });
     }
   };
 
   const checkBalance = async () => {
-    if (!provider) {
+    if (!wagmiProvider) {
       toast.error('Wallet provider not detected');
       return;
     }
     try {
-      const contract = new ethers.Contract(contractAddress, contractABI, provider);
+      const ethersProvider = await getEthersProvider();
+      if (!ethersProvider) {
+        throw new Error('Ethers.js provider not available');
+      }
+
+      const contract = new ethers.Contract(contractAddress, contractABI, ethersProvider);
       const balance = await contract.getContractBalance();
       console.log('Contract balance:', ethers.formatEther(balance), 'MON');
-      toast.success(`Contract balance: ${ethers.formatEther(balance)} MON`);
+      toast.success(`Contract balance: ${ethers.formatEther(balance)} MON`, { duration: 5000 });
     } catch (error: any) {
       console.error('Failed to check balance:', error);
-      toast.error('Failed to check balance: ' + error.message);
+      toast.error('Failed to check balance: ' + error.message, { duration: 5000 });
     }
   };
 

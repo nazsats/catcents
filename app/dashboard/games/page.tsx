@@ -71,7 +71,7 @@ export default function Games() {
     {
       id: 'catsweeper',
       title: 'Cat Sweeper',
-      description: 'Uncover safe cells and avoid bombs to earn Gmeow points!',
+      description: 'Uncover safe cells and avoid bombs to earn Meow Miles!',
       image: '/games/catsweeper.png',
     },
     {
@@ -84,7 +84,7 @@ export default function Games() {
     {
       id: 'race',
       title: 'Kitty Race (Coming Soon)',
-      description: 'Race your NFT cats for Gmeow glory!',
+      description: 'Race your NFT cats for Meow Miles glory!',
       image: '/games/race.png',
       comingSoon: true,
     },
@@ -141,7 +141,7 @@ export default function Games() {
           <h3 className="text-lg md:text-xl font-semibold text-purple-400 mb-4">Your Game Stats</h3>
           <div className="flex flex-col sm:flex-row justify-between gap-4">
             <p className="text-gray-300">
-              Total Games Gmeow: <span className="text-cyan-400 font-bold">{gamesGmeow}</span>
+              Total Meow Miles: <span className="text-cyan-400 font-bold">{gamesGmeow}</span>
             </p>
           </div>
         </div>
@@ -173,7 +173,7 @@ export default function Games() {
                 <p className="text-gray-300 text-sm mt-1">{game.description}</p>
                 {!game.comingSoon && (
                   <p className="text-gray-300 text-sm mt-2">
-                    Best Score: <span className="text-cyan-400 font-bold">{gameScores[game.id] || 0} Gmeow</span>
+                    Best Score: <span className="text-cyan-400 font-bold">{gameScores[game.id] || 0} Meow Miles</span>
                   </p>
                 )}
                 <Link

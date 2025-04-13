@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { db } from '../../lib/firebase';
 import { doc, getDoc, setDoc, collection, getDocs, query, orderBy, Timestamp, increment, addDoc } from 'firebase/firestore';
-import { ethers } from 'ethers';
+import { ethers } from 'ethers'; // ethers v6
 import Sidebar from '../../components/Sidebar';
 import Profile from '../../components/Profile';
 import { useWeb3Modal } from '../../lib/Web3ModalContext';
@@ -11,9 +11,9 @@ import toast, { Toaster } from 'react-hot-toast';
 import Image from 'next/image';
 
 const DEMO_PROPOSALS = [
-  { author: 'CatLord', title: 'Decentralized Node Hub', content: 'Deploy validator nodes.', date: new Date().toISOString(), image: '/proposals/1.png', yesVotes: 0, noVotes: 0 },
-  { author: 'PurrMaster', title: 'DeFi Incubator', content: 'Fund DeFi development.', date: new Date(Date.now() - 86400000).toISOString(), image: '/proposals/2.png', yesVotes: 0, noVotes: 0 },
-  { author: 'WhiskerWizard', title: 'Cross-Chain Bridge', content: 'Connect Monad to other chains.', date: new Date(Date.now() - 2 * 86400000).toISOString(), image: '/proposals/3.png', yesVotes: 0, noVotes: 0 },
+  { author: 'CatLord', title: 'Decentralized Node Hub', content: 'Deploy validator nodes.', date: new Date().toISOString(), image: '/proposals/1.png', yesVotes: 0, noVotes: 0, contractProposalId: 0 },
+  { author: 'PurrMaster', title: 'DeFi Incubator', content: 'Fund DeFi development.', date: new Date(Date.now() - 86400000).toISOString(), image: '/proposals/2.png', yesVotes: 0, noVotes: 0, contractProposalId: 1 },
+  { author: 'WhiskerWizard', title: 'Cross-Chain Bridge', content: 'Connect Monad to other chains.', date: new Date(Date.now() - 2 * 86400000).toISOString(), image: '/proposals/3.png', yesVotes: 0, noVotes: 0, contractProposalId: 2 },
 ];
 
 const ADMIN_WALLET = '0x6D54EF5Fa17d69717Ff96D2d868e040034F26024'.toLowerCase();
@@ -24,10 +24,33 @@ const getRandomCatEmoji = (seed: string) => {
   return catEmojis[index];
 };
 
+const CONTRACT_ADDRESS = '0x9C451d8065314504Bb90f37c8b6431c57Fc655C4';
+const CONTRACT_ABI = [
+  'function voteYes(uint256 proposalId) external',
+  'function voteNo(uint256 proposalId) external',
+];
+const MONAD_TESTNET_CHAIN_ID = '0x279f'; // Hex for 10143
+
 export default function Proposals() {
-  const { account, provider, loading, disconnectWallet } = useWeb3Modal();
+  const { account, provider: wagmiProvider, loading, disconnectWallet, selectedWallet } = useWeb3Modal();
   const [proposals, setProposals] = useState<
-    { id: string; author: string; title: string; content: string; date: string; image?: string; yesVotes: number; noVotes: number; likedByUser: boolean; votedByUser: 'yes' | 'no' | null; isExpanded: boolean; isLiking?: boolean; isVoting?: boolean }[]
+    {
+      id: string;
+      author: string;
+      title: string;
+      content: string;
+      date: string;
+      image?: string;
+      yesVotes: number;
+      noVotes: number;
+      likedByUser: boolean;
+      votedByUser: 'yes' | 'no' | null;
+      isExpanded: boolean;
+      isLiking?: boolean;
+      isVoting?: boolean;
+      contractProposalId: number;
+      isVotable: boolean;
+    }[]
   >([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -40,6 +63,31 @@ export default function Proposals() {
   const contentPreviewLength = 100;
   const [hasRedirected, setHasRedirected] = useState(false);
 
+  // Convert Wagmi provider to Ethers.js provider
+  const getEthersProvider = async () => {
+    if (!wagmiProvider) {
+      console.error('Wagmi provider not available');
+      return null;
+    }
+    try {
+      let provider;
+      const win = window as Window & { phantom?: { ethereum?: any }; backpack?: { ethereum?: any } };
+      if (selectedWallet === 'phantom' && win.phantom?.ethereum) {
+        provider = win.phantom.ethereum;
+      } else if (selectedWallet === 'backpack' && (win.backpack?.ethereum || wagmiProvider.isBackpack)) {
+        provider = win.backpack?.ethereum || wagmiProvider;
+      } else if (selectedWallet === 'metaMask' && wagmiProvider.isMetaMask) {
+        provider = wagmiProvider;
+      } else {
+        provider = wagmiProvider;
+      }
+      return new ethers.BrowserProvider(provider);
+    } catch (error) {
+      console.error('Failed to create Ethers.js provider:', error);
+      return null;
+    }
+  };
+
   const fetchProposalsAndUserData = async (userAddress: string) => {
     setIsLoading(true);
     setError(null);
@@ -51,10 +99,10 @@ export default function Proposals() {
       if (propSnapshot.empty) {
         console.log('Initializing demo proposals...');
         const addPromises = DEMO_PROPOSALS.map((prop) =>
-          addDoc(collection(db, 'proposals'), { 
-            ...prop, 
-            date: Timestamp.fromDate(new Date(prop.date)), 
-            likes: 0 
+          addDoc(collection(db, 'proposals'), {
+            ...prop,
+            date: Timestamp.fromDate(new Date(prop.date)),
+            likes: 0,
           })
         );
         await Promise.all(addPromises);
@@ -86,12 +134,34 @@ export default function Proposals() {
             isExpanded: false,
             isLiking: false,
             isVoting: false,
+            contractProposalId: Number(propData.contractProposalId) || 0,
+            isVotable: true,
           };
         })
       );
 
-      console.log('Mapped proposals:', fetchedProposals); // Debug log
-      setProposals(fetchedProposals);
+      // Check for duplicate contractProposalId values
+      const proposalIdMap = new Map<number, string[]>();
+      fetchedProposals.forEach((prop) => {
+        if (!proposalIdMap.has(prop.contractProposalId)) {
+          proposalIdMap.set(prop.contractProposalId, []);
+        }
+        proposalIdMap.get(prop.contractProposalId)!.push(prop.id);
+      });
+
+      const updatedProposals = fetchedProposals.map((prop) => {
+        const idsWithSameContractId = proposalIdMap.get(prop.contractProposalId);
+        const isVotable = !!idsWithSameContractId && idsWithSameContractId.length === 1 && !prop.votedByUser;
+        if (!isVotable && idsWithSameContractId && idsWithSameContractId.length > 1) {
+          console.warn(
+            `Duplicate contractProposalId ${prop.contractProposalId} found for proposals: ${idsWithSameContractId.join(', ')}`
+          );
+        }
+        return { ...prop, isVotable };
+      });
+
+      console.log('Mapped proposals:', updatedProposals);
+      setProposals(updatedProposals);
 
       let totalVotes = 0;
       await Promise.all(
@@ -155,64 +225,207 @@ export default function Proposals() {
   };
 
   const handleVote = async (propId: string, vote: 'yes' | 'no') => {
-    if (!account || !provider) {
+    if (!account || !wagmiProvider) {
       toast.error('Please connect your wallet');
       return;
     }
     const index = proposals.findIndex((p) => p.id === propId);
-    if (index === -1 || proposals[index].votedByUser || proposals[index].isVoting) return;
+    if (index === -1 || proposals[index].votedByUser || proposals[index].isVoting || !proposals[index].isVotable) {
+      if (!proposals[index].isVotable && !proposals[index].votedByUser) {
+        toast.error('Voting is disabled due to an invalid proposal ID.', { duration: 5000 });
+      }
+      return;
+    }
+
+    const proposal = proposals[index];
+    const contractProposalId = proposal.contractProposalId;
 
     setProposals((prev) => prev.map((prop, i) => (i === index ? { ...prop, isVoting: true } : prop)));
 
-    const propRef = doc(db, 'proposals', propId);
-    const voteRef = doc(db, 'proposals', propId, 'votes', account);
-    const userRef = doc(db, 'users', account);
+    const pendingToast = toast.loading(`Processing ${vote} vote...`);
 
     try {
-      const voteSnap = await getDoc(voteRef);
-      if (!voteSnap.exists()) {
-        const signer = await provider.getSigner();
-        const contractAddress = '0x9C451d8065314504Bb90f37c8b6431c57Fc655C4';
-        const contractABI = [
-          'function voteYes(uint256 proposalId) external',
-          'function voteNo(uint256 proposalId) external',
-        ];
-        const contract = new ethers.Contract(contractAddress, contractABI, signer);
-        const proposalIndex = index;
-        const tx = vote === 'yes' ? await contract.voteYes(proposalIndex) : await contract.voteNo(proposalIndex);
+      const ethersProvider = await getEthersProvider();
+      if (!ethersProvider) {
+        throw new Error('Ethers.js provider not available');
+      }
 
-        const pendingToast = toast.loading('Processing vote...');
-        const receipt = await tx.wait();
-        const txHash = receipt.hash;
+      // Check network
+      const network = await ethersProvider.getNetwork();
+      console.log('Current network chain ID:', network.chainId.toString());
 
-        await setDoc(voteRef, { vote, votedAt: new Date().toISOString(), txHash });
-        await setDoc(propRef, { [vote === 'yes' ? 'yesVotes' : 'noVotes']: increment(1) }, { merge: true });
-        await setDoc(userRef, { proposalsGmeow: increment(10) }, { merge: true });
+      if (network.chainId.toString() !== '10143') {
+        console.log('Switching to Monad Testnet...');
+        try {
+          await wagmiProvider.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: MONAD_TESTNET_CHAIN_ID }],
+          });
+        } catch (switchError: any) {
+          if (switchError.code === 4902) {
+            console.log('Adding Monad Testnet to wallet...');
+            await wagmiProvider.request({
+              method: 'wallet_addEthereumChain',
+              params: [
+                {
+                  chainId: MONAD_TESTNET_CHAIN_ID,
+                  chainName: 'Monad Testnet',
+                  rpcUrls: ['https://testnet-rpc.monad.xyz'],
+                  nativeCurrency: { name: 'MON', symbol: 'MON', decimals: 18 },
+                  blockExplorerUrls: ['https://testnet.monadscan.com'],
+                },
+              ],
+            });
+          } else {
+            throw new Error('Failed to switch to Monad Testnet. Please switch networks manually.');
+          }
+        }
+      }
 
-        setProposals((prev) =>
-          prev.map((prop, i) =>
-            i === index
-              ? { ...prop, [vote === 'yes' ? 'yesVotes' : 'noVotes']: prop[vote === 'yes' ? 'yesVotes' : 'noVotes'] + 1, votedByUser: vote, isVoting: false }
-              : prop
-          )
-        );
-        setVotesCast((prev) => prev + 1);
-        setPointsEarned((prev) => prev + 10);
+      const updatedNetwork = await ethersProvider.getNetwork();
+      if (updatedNetwork.chainId.toString() !== '10143') {
+        throw new Error('Network verification failed. Please ensure you are on Monad Testnet.');
+      }
 
-        toast.dismiss(pendingToast);
-        toast.success(
+      const signer = await ethersProvider.getSigner();
+      console.log('Signer address:', await signer.getAddress());
+
+      // Validate contract address
+      console.log('Contract address:', CONTRACT_ADDRESS);
+      console.log('Contract address length:', CONTRACT_ADDRESS.length);
+      if (CONTRACT_ADDRESS.length !== 42 || !/^0x[0-9a-fA-F]{40}$/.test(CONTRACT_ADDRESS)) {
+        throw new Error('Invalid contract address');
+      }
+
+      // Check balance
+      const balance = await ethersProvider.getBalance(account);
+      console.log('Account balance:', ethers.formatEther(balance));
+      if (balance === BigInt(0)) {
+        throw new Error('Insufficient MON balance. Please claim testnet tokens from the Monad faucet.');
+      }
+
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+
+      // Validate contractProposalId
+      console.log('Voting on contract proposal ID:', contractProposalId);
+      console.log('Firestore proposal ID:', propId);
+      console.log('Proposal UI index:', index);
+      if (!Number.isInteger(contractProposalId) || contractProposalId < 0) {
+        throw new Error('Invalid contract proposal ID');
+      }
+
+      // Simulate transaction
+      const iface = new ethers.Interface(CONTRACT_ABI);
+      const data = iface.encodeFunctionData(vote === 'yes' ? 'voteYes' : 'voteNo', [contractProposalId]);
+      console.log('Encoded transaction data:', data);
+
+      try {
+        await ethersProvider.call({
+          to: CONTRACT_ADDRESS,
+          data,
+          from: account,
+        });
+        console.log('Simulation successful');
+      } catch (simError: any) {
+        console.error('Simulation failed:', simError);
+        throw new Error(`Transaction will fail: ${simError.reason || simError.message || 'Unknown reason'}`);
+      }
+
+      // Send transaction
+      const gasLimit = 100000;
+      console.log('Gas limit:', gasLimit);
+
+      const tx = await (vote === 'yes' ? contract.voteYes(contractProposalId) : contract.voteNo(contractProposalId));
+      console.log('Transaction sent:', tx.hash);
+
+      const receipt = await tx.wait();
+      if (!receipt || receipt.status === 0) {
+        throw new Error('Transaction failed or no receipt received');
+      }
+      const txHash = receipt.hash;
+      console.log('Transaction confirmed:', txHash);
+
+      // Update Firestore
+      const propRef = doc(db, 'proposals', propId);
+      const voteRef = doc(db, 'proposals', propId, 'votes', account);
+      const userRef = doc(db, 'users', account);
+
+      await setDoc(voteRef, { vote, votedAt: new Date().toISOString(), txHash });
+      await setDoc(propRef, { [vote === 'yes' ? 'yesVotes' : 'noVotes']: increment(1) }, { merge: true });
+      await setDoc(userRef, { proposalsGmeow: increment(10) }, { merge: true });
+
+      setProposals((prev) =>
+        prev.map((prop, i) =>
+          i === index
+            ? { ...prop, [vote === 'yes' ? 'yesVotes' : 'noVotes']: prop[vote === 'yes' ? 'yesVotes' : 'noVotes'] + 1, votedByUser: vote, isVoting: false }
+            : prop
+        )
+      );
+      setVotesCast((prev) => prev + 1);
+      setPointsEarned((prev) => prev + 10);
+
+      toast.dismiss(pendingToast);
+      toast.success(
+        <div>
+          Voted {vote} successfully! +10 Meow Miles{' '}
+          <a
+            href={`https://testnet.monadscan.com/tx/${txHash}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline text-cyan-400"
+          >
+            View on MonadScan
+          </a>
+        </div>,
+        { duration: 5000 }
+      );
+    } catch (error: any) {
+      console.error('Failed to vote:', error);
+      toast.dismiss(pendingToast);
+      if (error.message.includes('insufficient funds') || error.message.includes('Insufficient MON balance')) {
+        toast.error(
           <div>
-            Voted {vote} successfully! +10 Gmeow{' '}
-            <a href={`https://testnet.monadexplorer.com/tx/${txHash}`} target="_blank" rel="noopener noreferrer" className="underline text-cyan-400">
-              View on Explorer
+            Insufficient MON balance.{' '}
+            <a
+              href="https://testnet.monad.xyz/faucet"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline text-cyan-400"
+            >
+              Claim MON tokens
             </a>
           </div>,
           { duration: 5000 }
         );
+      } else if (error.message.includes('Failed to switch to Monad Testnet')) {
+        toast.error(
+          <div>
+            {error.message}{' '}
+            <button
+              onClick={() => handleVote(propId, vote)}
+              className="underline text-cyan-400 hover:text-cyan-300"
+            >
+              Retry
+            </button>
+          </div>,
+          { duration: 10000 }
+        );
+      } else if (error.message.includes('Already voted on this proposal')) {
+        toast.error(
+          'You have already voted on this proposal or the proposal ID is invalid. Please try another proposal.',
+          { duration: 5000 }
+        );
+        setProposals((prev) =>
+          prev.map((prop, i) => (i === index ? { ...prop, isVotable: false, isVoting: false } : prop))
+        );
+      } else if (error.code === 'CALL_EXCEPTION' || error.message.includes('revert')) {
+        toast.error(
+          `Vote failed: ${error.reason || 'You may have already voted or the proposal ID is invalid.'}`,
+          { duration: 5000 }
+        );
+      } else {
+        toast.error('Failed to vote: ' + error.message, { duration: 5000 });
       }
-    } catch (error) {
-      console.error('Failed to vote:', error);
-      toast.error('Failed to vote: ' + (error as Error).message);
       setProposals((prev) => prev.map((prop, i) => (i === index ? { ...prop, isVoting: false } : prop)));
     }
   };
@@ -283,7 +496,7 @@ export default function Proposals() {
               <span className="text-purple-400 font-semibold">Catcents</span>, but the entire ecosystem we’re building together.
             </p>
             <p className="text-sm md:text-base text-gray-300 mt-2 leading-relaxed">
-              Earn <span className="text-pink-400 font-semibold">MeowMiles</span>. Influence what’s next.
+              Earn <span className="text-pink-400 font-semibold">Meow Miles</span>. Influence what’s next.
             </p>
             <p className="text-base md:text-lg font-bold text-cyan-400 mt-2">Let’s shape it, together.</p>
           </div>
@@ -294,6 +507,7 @@ export default function Proposals() {
               width={300}
               height={300}
               className="w-full h-auto object-contain rounded-lg"
+              priority
             />
           </div>
         </div>
@@ -305,7 +519,7 @@ export default function Proposals() {
               Votes Cast: <span className="text-cyan-400 font-bold">{votesCast}</span>
             </p>
             <p className="text-gray-300">
-              Points Earned: <span className="text-cyan-400 font-bold">{pointsEarned} Gmeow</span>
+              Points Earned: <span className="text-cyan-400 font-bold">{pointsEarned} Meow Miles</span>
             </p>
           </div>
         </div>
@@ -407,6 +621,10 @@ export default function Proposals() {
                     {proposal.votedByUser ? (
                       <span className="text-gray-400 text-xs md:text-sm font-semibold px-3 py-1 md:px-4 md:py-2 bg-gray-800 rounded-full">
                         Vote Cast: {proposal.votedByUser === 'yes' ? 'Yes 👍' : 'No 👎'}
+                      </span>
+                    ) : !proposal.isVotable ? (
+                      <span className="text-gray-400 text-xs md:text-sm font-semibold px-3 py-1 md:px-4 md:py-2 bg-gray-800 rounded-full">
+                        Voting Disabled: Invalid Proposal ID
                       </span>
                     ) : (
                       <>
